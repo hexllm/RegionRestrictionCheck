@@ -4636,16 +4636,23 @@ function MediaUnlockTest_BilibiliAnimeNew() {
 
 function MediaUnlockTest_ChatGPT() {
     local tmpresult
-    tmpresult=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -SsLI --max-time 10 "https://chatgpt.com" 2>&1)
+    tmpresult=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -SsL -w "\n%{http_code}" --max-time 10 "https://chatgpt.com/api/auth/session" 2>&1)
     local curl_rc=$?
     if is_v6_no_aaaa "$1" "$curl_rc" "$tmpresult"; then
         echo -n -e "\r ChatGPT:\t\t\t\t${Font_Red}IPv6 Not Support${Font_Suffix}\n"
         return
     fi
-    if [ -z "$tmpresult" ] || [[ "$tmpresult" == *"curl:"* ]]; then
+    if [ "$curl_rc" -ne 0 ] || [ -z "$tmpresult" ] || [[ "$tmpresult" == *"curl:"* ]]; then
         echo -n -e "\r ChatGPT:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
+    local http_code="${tmpresult##*$'\n'}"
+    local session_body="${tmpresult%$'\n'*}"
+    if [ -z "$http_code" ] || [ "$http_code" = "000" ]; then
+        echo -n -e "\r ChatGPT:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
+        return
+    fi
+
     local tmpresult1
     tmpresult1=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -SsL --max-time 10 "https://ios.chat.openai.com" 2>&1)
     local curl_rc=$?
@@ -4655,16 +4662,38 @@ function MediaUnlockTest_ChatGPT() {
     fi
     local cf_details=""
     if echo "$tmpresult1" | jq -e 'type == "object"' >/dev/null 2>&1; then
-        cf_details=$(echo "$tmpresult1" | jq .cf_details 2>/dev/null)
+        cf_details=$(echo "$tmpresult1" | jq -r '.cf_details // empty' 2>/dev/null)
     fi
 
-    local result1=$(echo "$tmpresult" | grep -i '^location:' )
-    if [ ! -n "$result1" ]; then
+    if [ "$http_code" = "200" ] && echo "$session_body" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        local trace_res
+        trace_res=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -SsL --max-time 10 "https://chatgpt.com/cdn-cgi/trace" 2>&1)
+        local curl_rc=$?
+        if is_v6_no_aaaa "$1" "$curl_rc" "$trace_res"; then
+            echo -n -e "\r ChatGPT:\t\t\t\t${Font_Red}IPv6 Not Support${Font_Suffix}\n"
+            return
+        fi
+        local region1
+        region1=$(echo "$trace_res" | grep "^loc=" | awk -F= '{print $2}')
+        if [[ "$cf_details" == *"(1)"* ]]; then
+            echo -n -e "\r ChatGPT:\t\t\t\t${Font_Yellow}Web Only (Disallowed ISP[1])${Font_Suffix}\n"
+            return
+        fi
+        if [[ "$cf_details" == *"(2)"* ]]; then
+            echo -n -e "\r ChatGPT:\t\t\t\t${Font_Yellow}Web Only (Disallowed ISP[2])${Font_Suffix}\n"
+            return
+        fi
+        if [ -n "$region1" ]; then
+            echo -n -e "\r ChatGPT:\t\t\t\t${Font_Green}Yes (Region: ${region1})${Font_Suffix}\n"
+        else
+            echo -n -e "\r ChatGPT:\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
+        fi
+    else
         if [[ "$tmpresult1" == *"blocked_why_headline"* ]]; then
             echo -n -e "\r ChatGPT:\t\t\t\t${Font_Red}No (Blocked)${Font_Suffix}\n"
             return
         fi
-        if [[ "$tmpresult1" == *"unsupported_country_region_territory"* ]]; then
+        if [[ "$tmpresult1" == *"unsupported_country_region_territory"* ]] || [[ "$session_body" == *"unsupported_country_region_territory"* ]]; then
             echo -n -e "\r ChatGPT:\t\t\t\t${Font_Red}No (Unsupported Region)${Font_Suffix}\n"
             return
         fi
@@ -4676,25 +4705,15 @@ function MediaUnlockTest_ChatGPT() {
             echo -n -e "\r ChatGPT:\t\t\t\t${Font_Red}No (Disallowed ISP[2])${Font_Suffix}\n"
             return
         fi
-    	echo -n -e "\r ChatGPT:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
-    else
-    	local trace_res
-    	trace_res=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -SsL --max-time 10 "https://chatgpt.com/cdn-cgi/trace" 2>&1)
-    	local curl_rc=$?
-    	if is_v6_no_aaaa "$1" "$curl_rc" "$trace_res"; then
-    	    echo -n -e "\r ChatGPT:\t\t\t\t${Font_Red}IPv6 Not Support${Font_Suffix}\n"
-    	    return
-    	fi
-    	local region1=$(echo "$trace_res" | grep "loc=" | awk -F= '{print $2}')
-        if [[ "$cf_details" == *"(1)"* ]]; then
-            echo -n -e "\r ChatGPT:\t\t\t\t${Font_Yellow}Web Only (Disallowed ISP[1])${Font_Suffix}\n"
+        if [[ "$session_body" == *"Just a moment"* ]] || [[ "$session_body" == *"challenge-platform"* ]]; then
+            echo -n -e "\r ChatGPT:\t\t\t\t${Font_Red}Failed (Cloudflare Challenge)${Font_Suffix}\n"
             return
         fi
-        if [[ "$cf_details" == *"(2)"* ]]; then
-            echo -n -e "\r ChatGPT:\t\t\t\t${Font_Yellow}Web Only (Disallowed ISP[2])${Font_Suffix}\n"
+        if [[ "$http_code" =~ ^[0-9]{3}$ ]] && [ "$http_code" != "200" ]; then
+            echo -n -e "\r ChatGPT:\t\t\t\t${Font_Red}Failed (HTTP ${http_code})${Font_Suffix}\n"
             return
         fi
-        echo -n -e "\r ChatGPT:\t\t\t\t${Font_Green}Yes (Region: ${region1})${Font_Suffix}\n"
+        echo -n -e "\r ChatGPT:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
     fi
 }
 
@@ -4725,33 +4744,102 @@ function AIUnlockTest_Gemini_location() {
 
 function AIUnlockTest_Copilot() {
     local tmp
-    tmp=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -SsL --max-time 10 "https://copilot.microsoft.com/" 2>&1)
+    tmp=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -SsL -w "\n%{http_code}" --max-time 10 "https://copilot.microsoft.com/c/api/user" 2>&1)
     local curl_rc=$?
     if is_v6_no_aaaa "$1" "$curl_rc" "$tmp"; then
         echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}IPv6 Not Support${Font_Suffix}\n"
         return
     fi
+    if [ "$curl_rc" -ne 0 ] || [ -z "$tmp" ] || [[ "$tmp" == *"curl:"* ]]; then
+        echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
+        return
+    fi
+    local user_code="${tmp##*$'\n'}"
+    local user_body="${tmp%$'\n'*}"
+    if [ -z "$user_code" ] || [ "$user_code" = "000" ]; then
+        echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
+        return
+    fi
+    if [ "$user_code" = "451" ]; then
+        echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}No (Unsupported Region)${Font_Suffix}\n"
+        return
+    fi
+    if [ "$user_code" != "200" ]; then
+        if [[ "$user_body" == *"Just a moment"* ]] || [[ "$user_body" == *"challenge-platform"* ]]; then
+            echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}Failed (Cloudflare Challenge)${Font_Suffix}\n"
+        else
+            echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}Failed (HTTP ${user_code})${Font_Suffix}\n"
+        fi
+        return
+    fi
+    if ! echo "$user_body" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local region
+    region=$(echo "$user_body" | jq -r '.regionCode // empty' 2>/dev/null | tr '[:lower:]' '[:upper:]')
+
     local tmp2
-    tmp2=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -SsL --max-time 10 "https://copilot.microsoft.com/turing/conversation/chats?bundleVersion=1.1342.3-cplt.12"  2>&1)
+    tmp2=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -SsL -X POST -H "Content-Type: application/json" -d "{}" -w "\n%{http_code}" --max-time 10 "https://copilot.microsoft.com/c/api/start" 2>&1)
     local curl_rc=$?
     if is_v6_no_aaaa "$1" "$curl_rc" "$tmp2"; then
         echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}IPv6 Not Support${Font_Suffix}\n"
         return
     fi
-    if [[ "$tmp" == "curl"* ]] || [[ "$tmp2" == "curl"* ]]; then
+    if [ "$curl_rc" -ne 0 ] || [ -z "$tmp2" ] || [[ "$tmp2" == *"curl:"* ]]; then
         echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    if ! echo "$tmp2" | jq -e 'type == "object"' >/dev/null 2>&1; then
+    local start_code="${tmp2##*$'\n'}"
+    local start_body="${tmp2%$'\n'*}"
+    if [ -z "$start_code" ] || [ "$start_code" = "000" ]; then
+        echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
+        return
+    fi
+    if [ "$start_code" = "451" ]; then
+        if [ -n "$region" ]; then
+            echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}No (Region: ${region})${Font_Suffix}\n"
+        else
+            echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}No (Unsupported Region)${Font_Suffix}\n"
+        fi
+        return
+    fi
+    if [ "$start_code" != "200" ]; then
+        if [[ "$start_body" == *"Just a moment"* ]] || [[ "$start_body" == *"challenge-platform"* ]]; then
+            echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}Failed (Cloudflare Challenge)${Font_Suffix}\n"
+        else
+            echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}Failed (HTTP ${start_code})${Font_Suffix}\n"
+        fi
+        return
+    fi
+    if ! echo "$start_body" | jq -e 'type == "object"' >/dev/null 2>&1; then
         echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}Failed${Font_Suffix}\n"
         return
     fi
-    local result=$(echo "$tmp2" | jq -r '.result.value // empty' 2>/dev/null)
-    local region=$(echo "$tmp" | sed -n 's/.*RevIpCC:"\([^"]*\)".*/\1/p' )
-    if [[ "$result" == "Success" ]];then
-        echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Green}Yes (Region: ${region^^})${Font_Suffix}\n"
-    else 
-        echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}No  (Region: ${region^^})${Font_Suffix}\n"
+    local is_blocked
+    is_blocked=$(echo "$start_body" | jq -r 'if .isBlocked == true then "true" elif .isBlocked == false then "false" else empty end' 2>/dev/null)
+    if [ -z "$is_blocked" ]; then
+        echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    case "$region" in
+        CN|CU|IR|KP|RU|BY|SY)
+            echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}No (Region: ${region})${Font_Suffix}\n"
+            return
+            ;;
+    esac
+    if [[ "$is_blocked" == "false" ]]; then
+        if [ -n "$region" ]; then
+            echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Green}Yes (Region: ${region})${Font_Suffix}\n"
+        else
+            echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Green}Yes${Font_Suffix}\n"
+        fi
+    else
+        if [ -n "$region" ]; then
+            echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}No (Blocked, Region: ${region})${Font_Suffix}\n"
+        else
+            echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}No (Blocked)${Font_Suffix}\n"
+        fi
     fi
 }
 
