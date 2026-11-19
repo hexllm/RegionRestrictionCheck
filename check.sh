@@ -230,8 +230,46 @@ if [ -z "$func" ]; then
 fi
 
 
+group_title=""
+group_leading_blank=0
+group_printed=0
+sub_title=""
+
+begin_Group() {
+    group_title="${1}"
+    group_leading_blank="${2:-0}"
+    group_printed=0
+    sub_title=""
+}
+
+end_Group() {
+    if (( group_printed )); then
+        echo "======================================="
+    fi
+    group_title=""
+    group_leading_blank=0
+    group_printed=0
+    sub_title=""
+}
+
+flush_GroupHeaders() {
+    if (( ! group_printed )); then
+        if (( group_leading_blank )); then
+            echo ""
+        fi
+        if [ -n "$group_title" ]; then
+            echo "$group_title"
+        fi
+        group_printed=1
+    fi
+    if [ -n "$sub_title" ]; then
+        echo -e "$sub_title"
+        sub_title=""
+    fi
+}
+
 ShowRegion() {
-    echo -e "${Font_Yellow} ---${1}---${Font_Suffix}"
+    sub_title="${Font_Yellow} ---${1}---${Font_Suffix}"
 }
 
 function detect_isp() {
@@ -5024,36 +5062,24 @@ function MediaUnlockTest_Wikipedia_Editable(){
 function echo_Result() {
     local ip_ver="${1}"
     local i line matched
-    local v6_unsupported=0
     for((i=0;i<${#array[@]};i++))
     do
-        if [[ "$ip_ver" == "6" ]] && [[ "$Stype" != "force6" ]]; then
-            matched=$(echo "$result" | grep -F -- "${array[i]}")
-            if [ -n "$matched" ]; then
-                while IFS= read -r line; do
-                    if [[ "$line" == *"IPv6 Not Support"* ]]; then
-                        ((v6_unsupported++))
-                    else
-                        printf '%s\n' "$line"
-                    fi
-                done <<< "$matched"
-            fi
-        else
-            echo "$result" | grep -F -- "${array[i]}"
+        matched=$(echo "$result" | grep -F -- "${array[i]}")
+        if [ -n "$matched" ]; then
+            while IFS= read -r line; do
+                if [[ "$ip_ver" == "6" ]] && [[ "$Stype" != "force6" ]] && [[ "$line" == *"IPv6 Not Support"* ]]; then
+                    continue
+                fi
+                flush_GroupHeaders
+                printf '%s\n' "$line"
+            done <<< "$matched"
         fi
         # sleep 0.03
     done;
-    if [[ "$ip_ver" == "6" ]] && [[ "$Stype" != "force6" ]] && (( v6_unsupported > 0 )); then
-        local label="services"
-        if (( v6_unsupported == 1 )); then
-            label="service"
-        fi
-        echo -n -e "\r IPv6 Not Support:\t\t\t${Font_Yellow}${v6_unsupported} ${label} (no AAAA)${Font_Suffix}\n"
-    fi
 }
 
 function NA_UnlockTest() {
-    echo "===========[ North America ]==========="
+    begin_Group "===========[ North America ]==========="
     local result=$(
     MediaUnlockTest_Fox ${1} &
     MediaUnlockTest_HuluUS ${1} &
@@ -5104,11 +5130,11 @@ function NA_UnlockTest() {
     wait
     local array=("CBC Gem:" "Crave:")
     echo_Result "${1}"
-    echo "======================================="
+    end_Group
 }
 
 function EU_UnlockTest() {
-    echo "===============[ Europe ]=============="
+    begin_Group "===============[ Europe ]=============="
     local result=$(
     MediaUnlockTest_RakutenTV ${1} &
     MediaUnlockTest_SkyShowTime ${1} &
@@ -5174,11 +5200,11 @@ function EU_UnlockTest() {
     ShowRegion RU
     local array=("Amediateka:")
     echo_Result "${1}"
-    echo "======================================="
+    end_Group
 }
 
 function HK_UnlockTest() {
-    echo "=============[ Hong Kong ]============="
+    begin_Group "=============[ Hong Kong ]============="
     local result=$(
         MediaUnlockTest_ViuTV ${1} &
         MediaUnlockTest_MyTVSuper ${1} &
@@ -5191,11 +5217,11 @@ function HK_UnlockTest() {
     wait
     local array=("Viu.TV:" "MyTVSuper:" "HBO Max:" "HOY TV" "BiliBili Hongkong/Macau/Taiwan:" "Bahamut Anime:" "NBA TV:")
     echo_Result "${1}"
-    echo "======================================="
+    end_Group
 }
 
 function TW_UnlockTest() {
-    echo "==============[ Taiwan ]==============="
+    begin_Group "==============[ Taiwan ]==============="
     local result=$(
     MediaUnlockTest_LiTV ${1} &
     MediaUnlockTest_MyVideo ${1} &
@@ -5212,11 +5238,11 @@ function TW_UnlockTest() {
     wait
     local array=("LiTV:" "ofiii:" "MyVideo:" "4GTV.TV:" "LineTV.TW:" "Hami Video:" "CatchPlay+:" "HBO Max" "Bahamut Anime:" "Friday Video:" "Bilibili Taiwan Only:")
     echo_Result "${1}"
-    echo "======================================="
+    end_Group
 }
 
 function JP_UnlockTest() {
-    echo "===============[ Japan ]==============="
+    begin_Group "===============[ Japan ]==============="
     local result=$(
     MediaUnlockTest_NHKPlus ${1} &
     MediaUnlockTest_DMMTV ${1} &
@@ -5275,13 +5301,12 @@ function JP_UnlockTest() {
     )
     local array=("EroGameSpace:")
     echo_Result "${1}"
-    echo "======================================="
+    end_Group
 
 }
 
 function Global_UnlockTest() {
-    echo ""
-    echo "============[ Multination ]============"
+    begin_Group "============[ Multination ]============" 1
     local result=$(
     MediaUnlockTest_Dazn ${1} &
     MediaUnlockTest_HotStar ${1} &
@@ -5305,22 +5330,22 @@ function Global_UnlockTest() {
     wait
     local array=("Dazn:" "HotStar:" "Disney+:" "Netflix:" "YouTube Premium:" "Amazon Prime Video:" "TVBAnywhere+:" "iQyi Oversea:" "Bilibili Anime:" "Viu.com:" "Tiktok" "YouTube CDN:" "Google Location:" "YouTube Region:" "Netflix Preferred CDN:" "Wikipedia Editability:" "Spotify Region:" "Steam Currency:" "Instagram")
     echo_Result "${1}"
-    echo "======================================="
+    end_Group
 }
 
 function SA_UnlockTest() {
-    echo "===========[ South America ]==========="
+    begin_Group "===========[ South America ]==========="
     local result=$(
     MediaUnlockTest_DirecTVGO ${1} &
     )
     wait
     local array=("HBO Max:" "DirecTV Go:")
     echo_Result "${1}"
-    echo "======================================="
+    end_Group
 }
 
 function OA_UnlockTest() {
-    echo "==============[ Oceania ]=============="
+    begin_Group "==============[ Oceania ]=============="
     local result=$(
     MediaUnlockTest_NBATV ${1} &
     MediaUnlockTest_AcornTV ${1} &
@@ -5355,11 +5380,11 @@ function OA_UnlockTest() {
     wait
     local array=("Neon TV:" "SkyGo NZ:" "ThreeNow:" "Maori TV:")
     echo_Result "${1}"
-    echo "======================================="
+    end_Group
 }
 
 function KR_UnlockTest() {
-    echo "==============[ Korean ]==============="
+    begin_Group "==============[ Korean ]==============="
     local result=$(
     MediaUnlockTest_Wavve ${1} &
     MediaUnlockTest_Tving ${1} &
@@ -5374,11 +5399,11 @@ function KR_UnlockTest() {
     wait
     local array=("Wavve:" "Tving:" "Coupang Play:" "Naver TV:" "Afreeca TV:" "SPOTV NOW:" "KBS Domestic:" "PandaTV:" "KOCOWA:")
     echo_Result "${1}"
-    echo "======================================="
+    end_Group
 }
 
 function SEA_UnlockTest(){
-    echo "==========[ SouthEastAsia ]============"
+    begin_Group "==========[ SouthEastAsia ]============"
     local result=$(
     MediaUnlockTest_HBOMax ${1} &
     MediaUnblockTest_BGlobalSEA ${1} &
@@ -5442,11 +5467,11 @@ function SEA_UnlockTest(){
     wait
     local array=("Zee5:" "NBA TV:" "MXPlayer" "Tata Play" "SonyLiv")
     echo_Result "${1}"
-    echo "======================================="
+    end_Group
 }
 
 function AF_UnlockTest() {
-    echo "==============[ Africa ]=============="
+    begin_Group "==============[ Africa ]=============="
     local result=$(
         MediaUnlockTest_DStv ${1} &
         MediaUnlockTest_Viu.com ${1} &
@@ -5455,11 +5480,11 @@ function AF_UnlockTest() {
     wait
     local array=("DStv:" "Viu.com:")
     echo_Result "${1}"
-    echo "======================================="
+    end_Group
 }
 
 function Sport_UnlockTest() {
-    echo "===============[ Sport ]==============="
+    begin_Group "===============[ Sport ]==============="
     local result=$(
     MediaUnlockTest_Dazn ${1} &
     MediaUnlockTest_ESPNPlus ${1} &
@@ -5471,11 +5496,11 @@ function Sport_UnlockTest() {
     wait
     local array=("Dazn:" "ESPN+:" "NBA TV:" "Fubo TV:" "Setanta Sports:" "Bein Sports Connect:")
     echo_Result "${1}"
-    echo "======================================="
+    end_Group
 }
 
 function AI_UnlockTest() {
-    echo "============[ AI Platform ]============"
+    begin_Group "============[ AI Platform ]============"
     local result=$(
     MediaUnlockTest_ChatGPT ${1} &
     AIUnlockTest_Gemini_location ${1} &
@@ -5486,7 +5511,7 @@ function AI_UnlockTest() {
     local array=("ChatGPT" "Copilot" "Gemini" "Claude:" )
     echo_Result "${1}"
 
-    echo "======================================="
+    end_Group
 }
 
 if [ -n "$func" ]; then
