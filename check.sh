@@ -207,16 +207,22 @@ if [ -z "$func" ]; then
     wait
     # bgptools_v4=$(curl $curlArgs -s -4 --max-time 10 --user-agent "${UA_Browser}" "https://v4.bgp.tools/whoami-not-for-robots" &)
     # bgptools_v6=$(curl $curlArgs -s -6 --max-time 10 --user-agent "${UA_Browser}" "https://v6.bgp.tools/whoami-not-for-robots" &)
-    ripe_stat_v4=$(curl $curlArgs -s --max-time 10 "https://stat.ripe.net/data/prefix-overview/data.json?resource=$local_ipv4" &)
-    ripe_stat_v6=$(curl $curlArgs -s --max-time 10 "https://stat.ripe.net/data/prefix-overview/data.json?resource=$local_ipv6" &)
-    wait
-    local_isp4=$(echo $ripe_stat_v4 | jq .data.asns[0].holder | tr -d '"')
-    local_as4=$(echo $ripe_stat_v4 | jq .data.asns[0].asn | tr -d '"')
-    local_ipv4_asterisk=$(echo $ripe_stat_v4 | jq .data.resource | tr -d '"')
-    local_isp6=$(echo $ripe_stat_v6 | jq .data.asns[0].holder | tr -d '"')
-    local_as6=$(echo $ripe_stat_v6 | jq .data.asns[0].asn | tr -d '"')
-    local_ipv6_asterisk=$(echo $ripe_stat_v6 | jq .data.resource | tr -d '"')
-    wait
+    if [ -n "$local_ipv4" ]; then
+        ripe_stat_v4=$(curl $curlArgs -s --max-time 10 "https://stat.ripe.net/data/prefix-overview/data.json?resource=$local_ipv4")
+        if echo "$ripe_stat_v4" | jq -e 'type == "object"' >/dev/null 2>&1; then
+            local_isp4=$(echo "$ripe_stat_v4" | jq '.data.asns[0].holder' 2>/dev/null | tr -d '"')
+            local_as4=$(echo "$ripe_stat_v4" | jq '.data.asns[0].asn' 2>/dev/null | tr -d '"')
+            local_ipv4_asterisk=$(echo "$ripe_stat_v4" | jq '.data.resource' 2>/dev/null | tr -d '"')
+        fi
+    fi
+    if [ -n "$local_ipv6" ]; then
+        ripe_stat_v6=$(curl $curlArgs -s --max-time 10 "https://stat.ripe.net/data/prefix-overview/data.json?resource=$local_ipv6")
+        if echo "$ripe_stat_v6" | jq -e 'type == "object"' >/dev/null 2>&1; then
+            local_isp6=$(echo "$ripe_stat_v6" | jq '.data.asns[0].holder' 2>/dev/null | tr -d '"')
+            local_as6=$(echo "$ripe_stat_v6" | jq '.data.asns[0].asn' 2>/dev/null | tr -d '"')
+            local_ipv6_asterisk=$(echo "$ripe_stat_v6" | jq '.data.resource' 2>/dev/null | tr -d '"')
+        fi
+    fi
 fi
 
 
@@ -230,7 +236,12 @@ function detect_isp() {
         echo "LAN"
         return
     else
-        local res=$(curl $curlArgs --user-agent "${UA_Browser}" -s --max-time 20 "https://api.ip.sb/geoip/$1" | jq ".isp" | tr -d '"' )
+        local tmp=$(curl $curlArgs --user-agent "${UA_Browser}" -s --max-time 20 "https://api.ip.sb/geoip/$1")
+        if ! echo "$tmp" | jq -e 'type == "object"' >/dev/null 2>&1; then
+            echo ""
+            return
+        fi
+        local res=$(echo "$tmp" | jq -r '.isp // empty' 2>/dev/null)
         echo "$res"
         return
     fi
@@ -412,7 +423,11 @@ function MediaUnlockTest_Netflix() {
     fi
     local result1=$( echo "$tmpresult1" | grep "og:video" )
     local result2=$( echo "$tmpresult2" | grep "og:video" )
-    local region1=$( echo -e $(echo "$tmpresult1" | grep 'netflix.reactContext' | awk -F= '{print $2}' | awk -F\; '{print $1}') | tr -d '[:cntrl:]' | sed 's/\^[^$]*\$//g' | jq '.models.geo.data.requestCountry.id' | tr -d '"' )
+    local react_json=$(echo -e "$(echo "$tmpresult1" | grep 'netflix.reactContext' | awk -F= '{print $2}' | awk -F\; '{print $1}')" | tr -d '[:cntrl:]' | sed 's/\^[^$]*\$//g')
+    local region1=""
+    if echo "$react_json" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        region1=$(echo "$react_json" | jq '.models.geo.data.requestCountry.id' 2>/dev/null | tr -d '"')
+    fi
 
     if [ -n "$result1" ] || [ -n "$result2" ]; then
         echo -n -e "\r Netflix:\t\t\t\t${Font_Green}Yes (Region: ${region1})${Font_Suffix}\n"
@@ -652,7 +667,11 @@ function MediaUnlockTest_wowow() {
         return
     fi
 
-    checkfailed=$(echo $tmpresult | jq '.error.code')
+    if ! echo "$tmpresult" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r WOWOW:\t\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local checkfailed=$(echo "$tmpresult" | jq '.error.code' 2>/dev/null)
     if [[ "$checkfailed" == "2055" ]]; then
         echo -n -e "\r WOWOW:\t\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         return
@@ -730,13 +749,20 @@ function MediaUnlockTest_SlingTV() {
         return
     fi
 
-    local is_restricted=$(echo $tmpresult | jq .ip_restricted | tr -d '"')
-    local region=$(echo $tmpresult | jq .country | tr -d '"')
+    if ! echo "$tmpresult" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r Sling TV:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local is_restricted=$(echo "$tmpresult" | jq .ip_restricted 2>/dev/null | tr -d '"')
+    local region=$(echo "$tmpresult" | jq .country 2>/dev/null | tr -d '"')
     if [[ "$is_restricted" == "true" ]]; then
         echo -n -e "\r Sling TV:\t\t\t\t${Font_Red}No  (Region: ${region^^})${Font_Suffix}\n"
         return
-    else
+    elif [[ "$is_restricted" == "false" ]]; then
         echo -n -e "\r Sling TV:\t\t\t\t${Font_Green}Yes (Region: ${region^^})${Font_Suffix}\n"
+        return
+    else
+        echo -n -e "\r Sling TV:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
         return
     fi
 }
@@ -768,14 +794,38 @@ function MediaUnlockTest_HBOMax() {
         echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local Token=$(echo $GetToken | jq .data.attributes.token | tr -d '"' )
-    local APITemp=$(curl $curlArgs -${1} -sS "https://default.any-any.prd.api.hbomax.com/session-context/headwaiter/v1/bootstrap" -H 'x-disco-client: WEB:10.15.7:dotcom-hbomax:7.7.0' -H 'x-disco-params: realm=bolt,bid=beam,features=ar' -X POST -b "st=${Token}")
-    local domain=$(echo $APITemp | jq .routing.domain | tr -d '"')
-    local tenant=$(echo $APITemp | jq .routing.tenant | tr -d '"')
-    local env=$(echo $APITemp | jq .routing.env | tr -d '"')
-    local homeMarket=$(echo $APITemp | jq .routing.homeMarket | tr -d '"')
+    if ! echo "$GetToken" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local Token=$(echo "$GetToken" | jq -r '.data.attributes.token // empty' 2>/dev/null)
+    local APITemp=$(curl $curlArgs -${1} -sS "https://default.any-any.prd.api.hbomax.com/session-context/headwaiter/v1/bootstrap" -H 'x-disco-client: WEB:10.15.7:dotcom-hbomax:7.7.0' -H 'x-disco-params: realm=bolt,bid=beam,features=ar' -X POST -b "st=${Token}" 2>&1)
+    if [[ "$APITemp" == "curl"* ]]; then
+        echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
+        return
+    fi
+    if ! echo "$APITemp" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local domain=$(echo "$APITemp" | jq -r '.routing.domain // empty' 2>/dev/null)
+    local tenant=$(echo "$APITemp" | jq -r '.routing.tenant // empty' 2>/dev/null)
+    local env=$(echo "$APITemp" | jq -r '.routing.env // empty' 2>/dev/null)
+    local homeMarket=$(echo "$APITemp" | jq -r '.routing.homeMarket // empty' 2>/dev/null)
+    if [ -z "$domain" ] || [ -z "$tenant" ] || [ -z "$env" ] || [ -z "$homeMarket" ]; then
+        echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
     local tmpresult=$(curl $curlArgs -${1} -sS "https://default.$tenant-$homeMarket.$env.$domain/users/me" -H 'x-disco-client: WEB:10.15.7:dotcom-hbomax:7.7.0' -H 'x-disco-params: realm=bolt,bid=beam,features=ar' -b "st=${Token}" 2>&1)
-    local result=$(echo $tmpresult | jq .data.attributes.currentLocationTerritory | tr -d '"')
+    if [[ "$tmpresult" == "curl"* ]]; then
+        echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
+        return
+    fi
+    if ! echo "$tmpresult" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local result=$(echo "$tmpresult" | jq -r '.data.attributes.currentLocationTerritory // empty' 2>/dev/null)
     local availableRegion=$(curl $curlArgs -${1} -sSL "https://www.hbomax.com/" 2>&1 | grep -woP '"url":"/[a-z]{2}/[a-z]{2}"' | cut -f4 -d'"' | cut -f2 -d'/' | sort -n | uniq | xargs | tr a-z A-Z)
     local isVPN=$(curl $curlArgs -${1} -sS 'https://default.any-any.prd.api.hbomax.com/any/playback/v1/playbackInfo'  -b 'st=eyJhbGciOiJSUzI1NiJ9.eyJqdGkiOiJ0b2tlbi0wOWQxOTg4Yy1mZmUzLTQxMDEtOWI5My0yNDU1ZTkyNGQ1YjYiLCJpc3MiOiJmcGEtaXNzdWVyIiwic3ViIjoiVVNFUklEOmJvbHQ6YjYzOTgxZWQtNzA2MC00ZGYwLThkZGItZjA2YjFkNWRjZWVkIiwiaWF0IjoxNzQzODQwMzgwLCJleHAiOjIwNTkyMDAzODAsInR5cGUiOiJBQ0NFU1NfVE9LRU4iLCJzdWJkaXZpc2lvbiI6ImJlYW1fYW1lciIsInNjb3BlIjoiZGVmYXVsdCIsImlpZCI6IjQwYTgzZjNlLTY4OTktNDE3Mi1hMWY2LWJjZDVjN2ZkNjA4NSIsInZlcnNpb24iOiJ2MyIsImFub255bW91cyI6ZmFsc2UsImRldmljZUlkIjoiNWY3YzViZjQtYjc4Ny00NDRjLWJhYTYtMzU5MzgwYWFiM2RmIn0.f5HTgIV2v0nQQDp5LQG0xqLrxyACdvnMDiWO_viX_CUGqtc5ncSjp_LgM30QFkkMnINFhzKEGRpsZvb-o3Pj_Z39uRBr5LCeiCPR7ssV-_SXyRFVRRDEB2lpxyz7jmdD1SxvA06HnEwTbZQzlbZ7g9GXq02yNdEfHlqYEh_4WF88UbXfeieYTd4TH7kwN1RE50NfQUS6f0WmzpAbpiULyd87mpTeynchFNMMz-YHVzZ_-nDW6geihXc3tS0FKVSR8fdOSPQFzEYOLCfhInufiPahiXI-OKF89aShAqM-y4Hx_eukGnsq3mO5wa3unnqVr9Kzc61BIhHh1Hs2bqYiYg;' -H 'x-disco-client: WEB:10.15.7:dotcom-hbomax:7.7.0' -H 'x-disco-params: realm=bolt,bid=beam,features=ar'  2>&1 )
     # Token may expire.
@@ -868,7 +918,11 @@ function MediaUnlockTest_HuluUS() {
         return
     fi
 
-    local result=$(echo "$tmpresult" | jq .error.name | tr -d '"')
+    if ! echo "$tmpresult" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r Hulu:\t\t\t\t\t${Font_Red}Failed (Error: PAGE ERROR)${Font_Suffix}\n"
+        return
+    fi
+    local result=$(echo "$tmpresult" | jq -r '.error.name // empty' 2>/dev/null)
     case "$result" in
         'LOGIN_FORBIDDEN') echo -n -e "\r Hulu:\t\t\t\t\t${Font_Green}Yes${Font_Suffix}\n" ;;
         'GEO_BLOCKED') echo -n -e "\r Hulu:\t\t\t\t\t${Font_Red}No${Font_Suffix}\n" ;;
@@ -1365,8 +1419,12 @@ function MediaUnlockTest_LiTV() {
         echo -n -e "\r LiTV:\t\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    result=$(echo $tmpresult | jq .error.code)
-    if [[ "$result" != "null" ]]; then
+    if ! echo "$tmpresult" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r LiTV:\t\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local result=$(echo "$tmpresult" | jq -r '.error.code // empty' 2>/dev/null)
+    if [ -n "$result" ]; then
         if [ "$result" = "42000087" ]; then
             echo -n -e "\r LiTV:\t\t\t\t\t${Font_Red}No${Font_Suffix}\n"
             return
@@ -1390,8 +1448,12 @@ function MediaUnlockTest_FridayVideo() {
         echo -n -e "\r Friday Video:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    result=$(echo $tmpresult | jq .code | tr -d '"')
-    if [[ "$result" != "null" ]]; then
+    if ! echo "$tmpresult" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r Friday Video:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local result=$(echo "$tmpresult" | jq -r '.code // empty' 2>/dev/null)
+    if [ -n "$result" ]; then
         if [ "$result" = "1006" ]; then
             echo -n -e "\r Friday Video:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
             return
@@ -1572,30 +1634,49 @@ function MediaUnlockTest_videoland() {
         return
     fi
 
-    local result=$(echo $tmpresult | jq .data.isOnboardingGeoBlocked)
+    if ! echo "$tmpresult" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r videoland:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local result=$(echo "$tmpresult" | jq .data.isOnboardingGeoBlocked 2>/dev/null)
     if [[ "$result" == "false" ]]; then
         echo -n -e "\r videoland:\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
         return
-    else
+    elif [[ "$result" == "true" ]]; then
         echo -n -e "\r videoland:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
+        return
+    else
+        echo -n -e "\r videoland:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
         return
     fi
 
 }
 
 function MediaUnlockTest_NPO_Start_Plus() {
-    local tmptoken=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -sS  --max-time 10 "https://npo.nl/start/api/domain/player-token?productId=BV_101410466")
+    local tmptoken=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -sS  --max-time 10 "https://npo.nl/start/api/domain/player-token?productId=BV_101410466" 2>&1)
     if [[ "$tmptoken" == "curl"* ]]; then
         echo -n -e "\r NPO Start Plus:\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local token=$(echo $tmptoken | jq .token | tr -d '"')
+    if ! echo "$tmptoken" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r NPO Start Plus:\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local token=$(echo "$tmptoken" | jq -r '.token // empty' 2>/dev/null)
+    if [ -z "$token" ]; then
+        echo -n -e "\r NPO Start Plus:\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
     local tmpresult=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -sS --max-time 10 "https://prod.npoplayer.nl/stream-link" -X POST -H "Authorization:$token" 2>&1)
     if [[ "$tmpresult" == "curl"* ]]; then
         echo -n -e "\r NPO Start Plus:\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local result=$(echo $tmpresult | jq .status)
+    if ! echo "$tmpresult" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r NPO Start Plus:\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local result=$(echo "$tmpresult" | jq .status 2>/dev/null)
     if [[ "$result" == "451" ]]; then
         echo -n -e "\r NPO Start Plus:\t\t\t${Font_Red}No${Font_Suffix}\n"
         return
@@ -1740,16 +1821,20 @@ function MediaUnlockTest_FranceTV() {
         echo -n -e "\r France.tv:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local region=$(echo $tmpresult | jq '.reponse.geo_info.country_code' | tr -d '"')
+    if ! echo "$tmpresult" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r France.tv:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local region=$(echo "$tmpresult" | jq -r '.reponse.geo_info.country_code // empty' 2>/dev/null)
     if [[ "$region" == "FR" ]]; then
         echo -n -e "\r France.tv:\t\t\t\t${Font_Green}Yes (Region: $region)${Font_Suffix}\n"
         return
-    else
+    elif [ -n "$region" ]; then
         echo -n -e "\r France.tv:\t\t\t\t${Font_Red}No   (Region: $region)${Font_Suffix}\n"
         return
     fi
 
-    echo -n -e "\r France.tv:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
+    echo -n -e "\r France.tv:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
     return
 
 }
@@ -1873,8 +1958,12 @@ function MediaUnlockTest_TVBAnywhere() {
         echo -n -e "\r TVBAnywhere+:\t\t\t\t${Font_21Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local region=$(echo $tmpresult | jq .country | tr -d '"' )
-    local result=$(echo $tmpresult | jq .allow_in_this_country )
+    if ! echo "$tmpresult" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r TVBAnywhere+:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local region=$(echo "$tmpresult" | jq -r '.country // empty' 2>/dev/null)
+    local result=$(echo "$tmpresult" | jq .allow_in_this_country 2>/dev/null)
     if [[ "$region" == "HK" ]]; then
         echo -n -e "\r TVBAnywhere+:\t\t\t\t${Font_Yellow}Serviced by MyTvSuper (Region: ${region})${Font_Suffix}\n"
         return
@@ -2005,12 +2094,15 @@ function MediaUnlockTest_NetflixCDN() {
         echo -n -e "\r Netflix Preferred CDN:\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local isp=$(echo $tmpresult | jq .client.isp)
-    local target_city=$(echo $tmpresult | jq .targets[0].location.city | tr -d '"')
-    local target_country=$(echo $tmpresult | jq .targets[0].location.country | tr -d '"')
-    local isp=$(echo $tmpresult | jq .client.isp | tr -d '"')
-    local target_url=$(echo $tmpresult | jq .targets[0].url | tr -d '"')
-    local target_fqdn=$(echo $target_url |awk -F"/" '{print $3}'| awk -F"." '{print $1}')
+    if ! echo "$tmpresult" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r Netflix Preferred CDN:\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local target_city=$(echo "$tmpresult" | jq -r '.targets[0].location.city // empty' 2>/dev/null)
+    local target_country=$(echo "$tmpresult" | jq -r '.targets[0].location.country // empty' 2>/dev/null)
+    local isp=$(echo "$tmpresult" | jq -r '.client.isp // empty' 2>/dev/null)
+    local target_url=$(echo "$tmpresult" | jq -r '.targets[0].url // empty' 2>/dev/null)
+    local target_fqdn=$(echo "$target_url" | awk -F"/" '{print $3}' | awk -F"." '{print $1}')
     if [ -n "$isp" ] && [[ "${isp}" != "null" ]] && [[ $target_url == *"isp.1.oca"*  ]]; then
         echo -n -e "\r Netflix Preferred CDN:\t\t\t${Font_Yellow}${isp}'s OCAs in ${target_city},${target_country} ($target_fqdn)${Font_Suffix}\n"
         return
@@ -2685,7 +2777,11 @@ function MediaUnlockTest_Instagram.Music() {
         echo -n -e "\r Instagram Licensed Music:\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local result=$(echo $tmpresult | jq .data.xdt_shortcode_media.clips_music_attribution_info.should_mute_audio)
+    if ! echo "$tmpresult" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r Instagram Licensed Music:\t\t${Font_Red}No  (Failed)${Font_Suffix}\n"
+        return
+    fi
+    local result=$(echo "$tmpresult" | jq .data.xdt_shortcode_media.clips_music_attribution_info.should_mute_audio 2>/dev/null)
     if [[ "$result" == "false" ]]; then
         echo -n -e "\r Instagram Licensed Music:\t\t${Font_Green}Yes${Font_Suffix}\n"
     elif [[ "$result" == "true" ]]; then
@@ -2955,17 +3051,18 @@ function MediaUnlockTest_SpotvNow() {
         return
     fi
 
-    local result=$(echo $tmpresult | jq .[0].error_subcode 2>/dev/null | tr -d '"')
-    local region=$(echo $tmpresult | jq .[0].client_geo 2>/dev/null | tr -d '"')
-    if [[ "$result" == "CLIENT_GEO" ]]; then
-        echo -n -e "\r SPOTV NOW:\t\t\t\t${Font_Red}No  (Region: ${region^^})${Font_Suffix}\n"
-        return
-    elif [ -z "$result" ] && [ -n "$tmpresult" ]; then
+    if echo "$tmpresult" | jq -e 'type == "array"' >/dev/null 2>&1; then
+        local result=$(echo "$tmpresult" | jq -r '.[0].error_subcode // empty' 2>/dev/null)
+        local region=$(echo "$tmpresult" | jq -r '.[0].client_geo // empty' 2>/dev/null)
+        if [[ "$result" == "CLIENT_GEO" ]]; then
+            echo -n -e "\r SPOTV NOW:\t\t\t\t${Font_Red}No  (Region: ${region^^})${Font_Suffix}\n"
+            return
+        fi
+    elif echo "$tmpresult" | jq -e 'type == "object"' >/dev/null 2>&1; then
         echo -n -e "\r SPOTV NOW:\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
         return
-    else
-        echo -n -e "\r SPOTV NOW:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
     fi
+    echo -n -e "\r SPOTV NOW:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
 
 }
 
@@ -3433,7 +3530,16 @@ function MediaUnlockTest_Google() {
         echo -n -e "\r Google Location:\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local region=$(echo "$tmp" | grep K4WWud | jq .[0][2] | grep -Eo '\[\[\\"(.*)\\",\\"S' )
+    local line=$(echo "$tmp" | grep K4WWud | head -n 1)
+    if ! echo "$line" | jq -e 'type == "array"' >/dev/null 2>&1; then
+        echo -n -e "\r Google Location:\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local region=$(echo "$line" | jq '.[0][2]' 2>/dev/null | grep -Eo '\[\[\\"(.*)\\",\\"S' | head -n 1)
+    if [ "${#region}" -le 10 ]; then
+        echo -n -e "\r Google Location:\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
     echo -n -e "\r Google Location:\t\t\t${Font_Green}${region:4:-6}${Font_Suffix}\n"
 }
 
@@ -3468,7 +3574,11 @@ function MediaUnlockTest_Tiktok() {
         echo -n -e "\r Tiktok:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local region="$(echo "${result1}" | jq ".data.store_region" | tr -d '"' )"
+    if [ -z "$result" ] || [[ "$result1" == "curl"* ]] || ! echo "${result1}" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r Tiktok:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local region="$(echo "${result1}" | jq -r '.data.store_region // empty' 2>/dev/null)"
     if [[ "$result" == *"/about" ]] || [[ "$result" == *"/status"* ]] || [[ "$result" == *"landing"* ]]; then
         if [[ "$region" == "cn" ]]; then
             echo -n -e "\r Tiktok:\t\t\t\t${Font_Yellow}Provided by Douyin${Font_Suffix}\n"
@@ -3514,11 +3624,15 @@ function MediaUnlockTest_KPlus() {
         echo -n -e "\r K+:\t\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local region=$(echo "${tmpresult}" | jq .session.geoCountryCode | tr -d '"')
+    if ! echo "${tmpresult}" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r K+:\t\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local region=$(echo "${tmpresult}" | jq -r '.session.geoCountryCode // empty' 2>/dev/null)
     if [[ "$region" == "VN" ]]; then
         echo -n -e "\r K+:\t\t\t\t\t${Font_Green}Yes (Region:${region})${Font_Suffix}\n"
         return
-    else
+    elif [ -n "$region" ]; then
         echo -n -e "\r K+:\t\t\t\t\t${Font_Red}No  (Region:${region})${Font_Suffix}\n"
         return
     fi
@@ -3535,7 +3649,11 @@ function MediaUnlockTest_TV360() {
         echo -n -e "\r TV360:\t\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local errcode=$(echo "${tmpresult}" | jq .errorCode)
+    if ! echo "${tmpresult}" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r TV360:\t\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local errcode=$(echo "${tmpresult}" | jq -r '.errorCode // empty' 2>/dev/null)
     if [[ "$errcode" == "310" ]]; then
         echo -n -e "\r TV360:\t\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         return
@@ -3577,7 +3695,11 @@ function MediaUnlockTest_JioCinema() {
         echo -n -e "\r Jio Cinema:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local code=$(echo "${tmpresult}" | jq .code)
+    if ! echo "${tmpresult}" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r Jio Cinema:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local code=$(echo "${tmpresult}" | jq -r '.code // empty' 2>/dev/null)
     if [[ "$code" == "474" ]]; then
         echo -n -e "\r Jio Cinema:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         return
@@ -3692,7 +3814,15 @@ function MediaUnlockTest_BilibiliAnimeNew() {
         echo -n -e "\r Bilibili Anime:\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local country_code=$(echo $tmp | jq '.data.country_code')
+    if ! echo "$tmp" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r Bilibili Anime:\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local country_code=$(echo "$tmp" | jq -r '.data.country_code // empty' 2>/dev/null)
+    if [ -z "$country_code" ]; then
+        echo -n -e "\r Bilibili Anime:\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
     if [ "$country_code" == "86" ]; then
         echo -n -e "\r Bilibili Anime:\t\t\t${Font_Green}Yes (Region: CN)${Font_Suffix}\n"
         return
@@ -3706,7 +3836,7 @@ function MediaUnlockTest_BilibiliAnimeNew() {
         echo -n -e "\r Bilibili Anime:\t\t\t${Font_Green}Yes (Region: MO)${Font_Suffix}\n"
         return
     else
-        local country=$(echo $tmp | jq '.data.country' | tr -d '"' )
+        local country=$(echo "$tmp" | jq -r '.data.country // empty' 2>/dev/null)
         echo -n -e "\r Bilibili Anime:\t\t\t${Font_Red}No  (Country: $country)${Font_Suffix}\n"
         return
     fi
@@ -3714,11 +3844,14 @@ function MediaUnlockTest_BilibiliAnimeNew() {
 
 function MediaUnlockTest_ChatGPT() {
     local tmpresult=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -SsLI --max-time 10 "https://chatgpt.com" 2>&1)
-    local tmpresult1=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -SsL --max-time 10 "https://ios.chat.openai.com" 2>&1)
-    local cf_details=$(echo "$tmpresult1" | jq .cf_details)
     if [[ "$tmpresult" == "curl"* ]]; then
         echo -n -e "\r ChatGPT:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
+    fi
+    local tmpresult1=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -SsL --max-time 10 "https://ios.chat.openai.com" 2>&1)
+    local cf_details=""
+    if echo "$tmpresult1" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        cf_details=$(echo "$tmpresult1" | jq .cf_details 2>/dev/null)
     fi
 
     local result1=$(echo "$tmpresult" | grep 'location' )
@@ -3775,18 +3908,31 @@ function AIUnlockTest_Gemini_location() {
         echo -n -e "\r Google Gemini Location:\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local region=$(echo "$tmp" | grep K4WWud | jq .[0][2] | grep -Eo '\[\[\\"(.*)\\",\\"S' )
+    local line=$(echo "$tmp" | grep K4WWud | head -n 1)
+    if ! echo "$line" | jq -e 'type == "array"' >/dev/null 2>&1; then
+        echo -n -e "\r Google Gemini Location:\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local region=$(echo "$line" | jq '.[0][2]' 2>/dev/null | grep -Eo '\[\[\\"(.*)\\",\\"S' | head -n 1)
+    if [ "${#region}" -le 10 ]; then
+        echo -n -e "\r Google Gemini Location:\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
     echo -n -e "\r Google Gemini Location:\t\t${Font_Yellow}${region:4:-6}${Font_Suffix}\n"
 }
 
 function AIUnlockTest_Copilot() {
     local tmp=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -SsL --max-time 10 "https://copilot.microsoft.com/" 2>&1)
     local tmp2=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -SsL --max-time 10 "https://copilot.microsoft.com/turing/conversation/chats?bundleVersion=1.1342.3-cplt.12"  2>&1)
-    if [[ "$tmp" == "curl"* ]]; then
+    if [[ "$tmp" == "curl"* ]] || [[ "$tmp2" == "curl"* ]]; then
         echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local result=$(echo "$tmp2" | jq .result.value  2>&1 | tr -d '"' 2>&1) 
+    if ! echo "$tmp2" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local result=$(echo "$tmp2" | jq -r '.result.value // empty' 2>/dev/null)
     local region=$(echo "$tmp" | sed -n 's/.*RevIpCC:"\([^"]*\)".*/\1/p' )
     if [[ "$result" == "Success" ]];then
         echo -n -e "\r Microsoft Copilot:\t\t\t${Font_Green}Yes (Region: ${region^^})${Font_Suffix}\n"
@@ -3852,8 +3998,12 @@ function MediaUnlockTest_Lemino() {
         echo -n -e "\r Lemino:\t\t\t\t${Font_Red}No  (Blocked)${Font_Suffix}\n"
         return
     fi
-    result=$(echo $tmpresult | jq .result_code | tr -d '"')
-    if [[ "$result" != "null" ]]; then
+    if ! echo "$tmpresult" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r Lemino:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local result=$(echo "$tmpresult" | jq -r '.result_code // empty' 2>/dev/null)
+    if [ -n "$result" ]; then
         if [[ "$result" == "WEBW100100" ]]; then
             echo -n -e "\r Lemino:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
             return
@@ -3923,7 +4073,11 @@ function MediaUnlockTest_RakutenTVJP(){
         return
     fi
 
-    local result=$(echo $tmpresult | jq .result.code | tr -d '"')
+    if ! echo "$tmpresult" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r Rakuten TV JP:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local result=$(echo "$tmpresult" | jq -r '.result.code // empty' 2>/dev/null)
     if [[ "$result" == "40404030802" ]]; then
         echo -n -e "\r Rakuten TV JP:\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
         return
