@@ -501,8 +501,12 @@ function MediaUnlockTest_Dazn() {
         echo -n -e "\r Dazn:\t\t\t\t\t${Font_Red}No  (Banned)${Font_Suffix}\n"
         return
     fi
-    local isAllowed=$(echo $tmpresult | jq .Region.isAllowed)
-    local region=$(echo $tmpresult | jq .Region.GeolocatedCountry | tr -d '"')
+    if ! echo "$tmpresult" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r Dazn:\t\t\t\t\t${Font_Red}Unsupport${Font_Suffix}\n"
+        return
+    fi
+    local isAllowed=$(echo "$tmpresult" | jq .Region.isAllowed 2>/dev/null)
+    local region=$(echo "$tmpresult" | jq .Region.GeolocatedCountry 2>/dev/null | tr -d '"')
 
     if [[ "$isAllowed" == "true" ]]; then
         echo -n -e "\r Dazn:\t\t\t\t\t${Font_Green}Yes (Region: ${region^^})${Font_Suffix}\n"
