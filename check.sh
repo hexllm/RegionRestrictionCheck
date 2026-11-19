@@ -815,6 +815,10 @@ function MediaUnlockTest_HBOMax() {
         return
     fi
     local Token=$(echo "$GetToken" | jq -r '.data.attributes.token // empty' 2>/dev/null)
+    if [ -z "$Token" ]; then
+        echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
     local APITemp=$(curl $curlArgs -${1} -sS "https://default.any-any.prd.api.hbomax.com/session-context/headwaiter/v1/bootstrap" -H 'x-disco-client: WEB:10.15.7:dotcom-hbomax:7.7.0' -H 'x-disco-params: realm=bolt,bid=beam,features=ar' -X POST -b "st=${Token}" 2>&1)
     if [[ "$APITemp" == "curl"* ]]; then
         echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
@@ -841,21 +845,88 @@ function MediaUnlockTest_HBOMax() {
         echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
         return
     fi
-    local result=$(echo "$tmpresult" | jq -r '.data.attributes.currentLocationTerritory // empty' 2>/dev/null)
-    local availableRegion=$(curl $curlArgs -${1} -sSL "https://www.hbomax.com/" 2>&1 | grep -woE '"url":"/[a-z]{2}/[a-z]{2}"' | cut -f4 -d'"' | cut -f2 -d'/' | sort | uniq | xargs | tr a-z A-Z)
-    local isVPN=$(curl $curlArgs -${1} -sS 'https://default.any-any.prd.api.hbomax.com/any/playback/v1/playbackInfo'  -b 'st=eyJhbGciOiJSUzI1NiJ9.eyJqdGkiOiJ0b2tlbi0wOWQxOTg4Yy1mZmUzLTQxMDEtOWI5My0yNDU1ZTkyNGQ1YjYiLCJpc3MiOiJmcGEtaXNzdWVyIiwic3ViIjoiVVNFUklEOmJvbHQ6YjYzOTgxZWQtNzA2MC00ZGYwLThkZGItZjA2YjFkNWRjZWVkIiwiaWF0IjoxNzQzODQwMzgwLCJleHAiOjIwNTkyMDAzODAsInR5cGUiOiJBQ0NFU1NfVE9LRU4iLCJzdWJkaXZpc2lvbiI6ImJlYW1fYW1lciIsInNjb3BlIjoiZGVmYXVsdCIsImlpZCI6IjQwYTgzZjNlLTY4OTktNDE3Mi1hMWY2LWJjZDVjN2ZkNjA4NSIsInZlcnNpb24iOiJ2MyIsImFub255bW91cyI6ZmFsc2UsImRldmljZUlkIjoiNWY3YzViZjQtYjc4Ny00NDRjLWJhYTYtMzU5MzgwYWFiM2RmIn0.f5HTgIV2v0nQQDp5LQG0xqLrxyACdvnMDiWO_viX_CUGqtc5ncSjp_LgM30QFkkMnINFhzKEGRpsZvb-o3Pj_Z39uRBr5LCeiCPR7ssV-_SXyRFVRRDEB2lpxyz7jmdD1SxvA06HnEwTbZQzlbZ7g9GXq02yNdEfHlqYEh_4WF88UbXfeieYTd4TH7kwN1RE50NfQUS6f0WmzpAbpiULyd87mpTeynchFNMMz-YHVzZ_-nDW6geihXc3tS0FKVSR8fdOSPQFzEYOLCfhInufiPahiXI-OKF89aShAqM-y4Hx_eukGnsq3mO5wa3unnqVr9Kzc61BIhHh1Hs2bqYiYg;' -H 'x-disco-client: WEB:10.15.7:dotcom-hbomax:7.7.0' -H 'x-disco-params: realm=bolt,bid=beam,features=ar'  2>&1 )
-    # Token may expire.
-    if [ -n "$result" ] && [[ " $availableRegion " == *" $result "* ]]; then
-        if [[ "$isVPN" == *"VPN"* ]]; then 
-            echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}No  (VPN Detected;Region: $result)${Font_Suffix}\n"
-            return
+    local result=$(echo "$tmpresult" | jq -r '.data.attributes.currentLocationTerritory // empty' 2>/dev/null | tr 'a-z' 'A-Z')
+    if [ -z "$result" ]; then
+        if echo "$tmpresult" | grep -qi 'geoblock'; then
+            echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
+        else
+            echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
         fi
-        echo -n -e "\r HBO Max:\t\t\t\t${Font_Green}Yes (Region: $result)${Font_Suffix}\n"
         return
-    else
+    fi
+    local hboPage=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -sSL "https://www.hbomax.com/" 2>&1)
+    if [[ "$hboPage" == "curl"* ]]; then
+        echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
+        return
+    fi
+    local geoJson=$(printf '%s' "$hboPage" | awk 'BEGIN{RS="<"} !found && /^script[^>]*id="__DOTCOM_GEO__"/{sub(/^[^>]*>/, ""); print; found=1}')
+    if ! echo "$geoJson" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local availableRegion=$(echo "$geoJson" | jq -r '((.pageLocales.availableLocales // []) | map(split("/")[0] | ascii_upcase)) as $base | ((.brand.territory // {}) | to_entries | map(select((.key | ascii_upcase) as $k | $base | index($k)) | .value[] | ascii_upcase)) as $terr | ($base + $terr) | unique | join(" ")' 2>/dev/null)
+    if [ -z "$availableRegion" ]; then
+        echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    if [[ " $availableRegion " != *" $result "* ]]; then
         echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         return
     fi
+    local homeResp=$(curl $curlArgs -${1} -sS "https://default.any-$homeMarket.$env.$domain/cms/routes/home?include=default" -H 'x-disco-client: WEB:10.15.7:dotcom-hbomax:7.7.0' -H 'x-disco-params: realm=bolt,bid=beam,features=ar' -b "st=${Token}" 2>&1)
+    if [[ "$homeResp" == "curl"* ]]; then
+        echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
+        return
+    fi
+    if ! echo "$homeResp" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local homeErr=$(echo "$homeResp" | jq -r '[.errors[]? | "\(.code // "") \(.detail // "") \(.message // "")"] | join(" ")' 2>/dev/null)
+    if [ -n "$homeErr" ]; then
+        if echo "$homeErr" | grep -qiE 'vpn|proxy'; then
+            echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}No  (VPN Detected;Region: $result)${Font_Suffix}\n"
+            return
+        elif echo "$homeErr" | grep -qi 'geoblock'; then
+            echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
+            return
+        fi
+    fi
+    local editId=$(echo "$homeResp" | jq -r '[.included[]? | select(.type == "edit") | .id][0] // empty' 2>/dev/null)
+    if [ -z "$editId" ]; then
+        editId="00000000-0000-0000-0000-000000000000"
+    fi
+    local isVPN=$(curl $curlArgs -${1} -sS -X POST "https://default.any-any.$env.$domain/any/playback/v1/playbackInfo" -b "st=${Token}" -H 'Content-Type: application/json' -H 'x-disco-client: WEB:10.15.7:dotcom-hbomax:7.7.0' -H 'x-disco-params: realm=bolt,bid=beam,features=ar' -d "{\"appBundle\":\"beam\",\"applicationSessionId\":\"da0cdd94-5a39-42ef-aa68-54cbc1b852c3\",\"consumptionType\":\"streaming\",\"capabilities\":{\"manifests\":{\"formats\":{\"dash\":{}}},\"codecs\":{\"video\":{\"hdrFormats\":[],\"decoders\":[]},\"audio\":{\"decoders\":[]}},\"devicePlatform\":{\"network\":{\"capabilities\":{\"protocols\":{\"http\":{\"byteRangeRequests\":true}}},\"lastKnownStatus\":{\"networkTransportType\":\"unknown\"}},\"videoSink\":{\"capabilities\":{\"colorGamuts\":[\"standard\"],\"hdrFormats\":[]},\"lastKnownStatus\":{\"height\":1080,\"width\":1920}}}},\"deviceInfo\":{\"browser\":{\"name\":\"chrome\",\"version\":\"120.0.0.0\"},\"deviceId\":\"afbb5daa-c327-461d-9460-d8e4b3ee4a1f\",\"make\":\"desktop\",\"model\":\"desktop\",\"os\":{\"name\":\"Windows\",\"version\":\"10\"},\"platform\":\"web\",\"player\":{\"mediaEngine\":{\"name\":\"shaka\",\"version\":\"4.0.0\"},\"playerView\":{\"height\":1080,\"width\":1920},\"sdk\":{\"name\":\"beam\",\"version\":\"5.0.0\"}},\"type\":\"desktop\"},\"editId\":\"${editId}\",\"firstPlay\":false,\"gdpr\":false,\"playbackSessionId\":\"da0cdd94-5a39-42ef-aa68-54cbc1b852c3\",\"userPreferences\":{}}" 2>&1)
+    if [[ "$isVPN" == "curl"* ]]; then
+        echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
+        return
+    fi
+    if ! echo "$isVPN" | jq -e 'type == "object"' >/dev/null 2>&1; then
+        echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        return
+    fi
+    local playbackErr=$(echo "$isVPN" | jq -r '[.errors[]? | "\(.code // "") \(.detail // "") \(.message // "")"] | join(" ")' 2>/dev/null)
+    if [ -n "$playbackErr" ]; then
+        if echo "$playbackErr" | grep -qiE 'vpn|proxy'; then
+            echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}No  (VPN Detected;Region: $result)${Font_Suffix}\n"
+            return
+        elif echo "$playbackErr" | grep -qi 'geoblock'; then
+            echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
+            return
+        elif echo "$playbackErr" | grep -qiE 'not\.found|unauthorized|entitlement'; then
+            echo -n -e "\r HBO Max:\t\t\t\t${Font_Green}Yes (Region: $result)${Font_Suffix}\n"
+            return
+        else
+            echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+            return
+        fi
+    fi
+    if echo "$isVPN" | jq -e '.manifest.url | type == "string" and length > 0' >/dev/null 2>&1; then
+        echo -n -e "\r HBO Max:\t\t\t\t${Font_Green}Yes (Region: $result)${Font_Suffix}\n"
+        return
+    fi
+    echo -n -e "\r HBO Max:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+    return
 
 }
 
@@ -3705,7 +3776,7 @@ function MediaUnlockTest_MYTV() {
 }
 
 function MediaUnlockTest_Google() {
-    local tmp=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -SsL --max-time 10 'https://bard.google.com/_/BardChatUi/data/batchexecute'   -H 'accept-language: en-US'   --data-raw 'f.req=[[["K4WWud","[[0],[\"en-US\"]]",null,"generic"]]]' 2>&1)
+    local tmp=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -SsL --max-time 10 'https://gemini.google.com/_/BardChatUi/data/batchexecute'   -H 'accept-language: en-US'   --data-raw 'f.req=[[["K4WWud","[[0],[\"en-US\"]]",null,"generic"]]]' 2>&1)
     if [[ "$tmp" == "curl"* ]]; then
         echo -n -e "\r Google Location:\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
@@ -3715,12 +3786,12 @@ function MediaUnlockTest_Google() {
         echo -n -e "\r Google Location:\t\t\t${Font_Red}Failed${Font_Suffix}\n"
         return
     fi
-    local region=$(echo "$line" | jq '.[0][2]' 2>/dev/null | grep -Eo '\[\[\\"(.*)\\",\\"S' | head -n 1)
-    if [ "${#region}" -le 10 ]; then
+    local region=$(echo "$line" | jq -r '.[0][2] | if type == "string" then (fromjson? | if type == "array" and (.[0] | type == "array") and (.[0][0] | type == "string") then .[0][0] else empty end) else empty end' 2>/dev/null)
+    if [ -z "$region" ]; then
         echo -n -e "\r Google Location:\t\t\t${Font_Red}Failed${Font_Suffix}\n"
         return
     fi
-    echo -n -e "\r Google Location:\t\t\t${Font_Green}${region:4:-6}${Font_Suffix}\n"
+    echo -n -e "\r Google Location:\t\t\t${Font_Green}${region}${Font_Suffix}\n"
 }
 
 function MediaUnlockTest_NHKPlus() {
