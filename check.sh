@@ -2580,7 +2580,7 @@ function MediaUnlockTest_Spotify() {
 }
 
 function MediaUnlockTest_VideoMarket() {
-    local TokenSrc=$(curl $curlArgs  --user-agent "${UA_Browser}" -${1} -Ss --max-time 10 "https://www.videomarket.jp/player/17588S/A17588S001999H01"  2>&1)
+    local TokenSrc=$(curl $curlArgs  --user-agent "${UA_Browser}" -${1} --compressed -Ss --max-time 10 "https://www.videomarket.jp/player/17588S/A17588S001999H01" 2>&1 | tr -d '\0')
     if [[ "$TokenSrc" == "curl"* ]]; then
         echo -n -e "\r VideoMarket:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
@@ -2590,7 +2590,7 @@ function MediaUnlockTest_VideoMarket() {
         echo -n -e "\r VideoMarket:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
         return
     fi
-    local tmpresult=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -sSL --max-time 10 "https://www.videomarket.jp/graphql" -X POST -d '{"operationName":"readStatus","variables":{},"query":"query readStatus {\n  readStatus {\n    isRead\n    __typename\n  }\n}\n"}' -H "Authorization:Bearer ${Token}" 2>&1)
+    local tmpresult=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" --compressed -sSL --max-time 10 "https://www.videomarket.jp/graphql" -X POST -H "Content-Type: application/json" -d '{"operationName":"readStatus","variables":{},"query":"query readStatus {\n  readStatus {\n    isRead\n    __typename\n  }\n}\n"}' -H "Authorization:Bearer ${Token}" 2>&1 | tr -d '\0')
     if [[ "$tmpresult" == "curl"* ]] || [ -z "$tmpresult" ]; then
         echo -n -e "\r VideoMarket:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
@@ -2598,8 +2598,10 @@ function MediaUnlockTest_VideoMarket() {
     local result=$(echo "$tmpresult" | grep OverseasAccess)
     if [ -n "$result" ]; then
         echo -n -e "\r VideoMarket:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
-    else
+    elif echo "$tmpresult" | jq -e 'type == "object" and (.errors == null) and (.data.readStatus != null)' >/dev/null 2>&1; then
         echo -n -e "\r VideoMarket:\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
+    else
+        echo -n -e "\r VideoMarket:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
     fi
 
 }
