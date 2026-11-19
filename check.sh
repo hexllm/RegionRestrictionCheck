@@ -90,7 +90,7 @@ Media_Cookie=$(curl $curlArgs -s --retry 3 --max-time 10 "https://raw.githubuser
 IATACode=$(curl $curlArgs -s --retry 3 --max-time 10 "https://raw.githubusercontent.com/1-stream/RegionRestrictionCheck/main/reference/IATACode.txt")
 
 checkOS() {
-    ifTermux=$(echo $PWD | grep termux)
+    ifTermux=$(echo "$PWD" | grep termux)
     ifMacOS=$(uname -a | grep Darwin)
     if [ -n "$ifTermux" ]; then
         os_version=Termux
@@ -292,8 +292,8 @@ function MediaUnlockTest_BahamutAnime() {
         return
     fi
     rm -f bahamut_cookie.txt
-    local result=$(echo $tmpresult | python -m json.tool 2>/dev/null | grep 'animeSn')
-    local result2=$(echo $tmpresult2 | python -m json.tool 2>/dev/null | grep 'animeSn')
+    local result=$(echo "$tmpresult" | python -m json.tool 2>/dev/null | grep 'animeSn')
+    local result2=$(echo "$tmpresult2" | python -m json.tool 2>/dev/null | grep 'animeSn')
     if [ -n "$result" ] && [ -n "$result2" ]; then
         echo -n -e "\r Bahamut Anime:\t\t\t\t${Font_Green}Yes (Region: TW)${Font_Suffix}\n"
     elif [ -n "$result2" ]; then
@@ -304,7 +304,7 @@ function MediaUnlockTest_BahamutAnime() {
 }
 
 function MediaUnlockTest_BilibiliHKMCTW() {
-    local randsession="$(cat /dev/urandom | head -n 32 | md5sum | head -c 32)"
+    local randsession="$(head -c 32 /dev/urandom | md5sum | head -c 32)"
     local result=$(curl $curlArgs --user-agent "${UA_Browser}" -${1} -fsSL --max-time 10 "https://api.bilibili.com/pgc/player/web/playurl?avid=18281381&cid=29892777&qn=0&type=&otype=json&ep_id=183799&fourk=1&fnver=0&fnval=16&session=${randsession}&module=bangumi" 2>&1)
     if [[ "$result" != "curl"* ]]; then
         local result="$(echo "${result}" | python -m json.tool 2>/dev/null | grep '"code"' | head -1 | awk '{print $2}' | cut -d ',' -f1)"
@@ -322,7 +322,7 @@ function MediaUnlockTest_BilibiliHKMCTW() {
 
 # 流媒体解锁测试-哔哩哔哩台湾限定
 function MediaUnlockTest_BilibiliTW() {
-    local randsession="$(cat /dev/urandom | head -n 32 | md5sum | head -c 32)"
+    local randsession="$(head -c 32 /dev/urandom | md5sum | head -c 32)"
     # 尝试获取成功的结果
     local result=$(curl $curlArgs --user-agent "${UA_Browser}" -${1} -fsSL --max-time 10 "https://api.bilibili.com/pgc/player/web/playurl?avid=50762638&cid=100279344&qn=0&type=&otype=json&ep_id=268176&fourk=1&fnver=0&fnval=16&session=${randsession}&module=bangumi" 2>&1)
     if [[ "$result" != "curl"* ]]; then
@@ -410,7 +410,7 @@ function MediaUnlockTest_BBCiPLAYER() {
     fi
 
     if [ -n "$tmpresult" ]; then
-        result=$(echo $tmpresult | grep 'geolocation')
+        result=$(echo "$tmpresult" | grep 'geolocation')
         if [ -n "$result" ]; then
             echo -n -e "\r BBC iPLAYER:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         else
@@ -461,8 +461,8 @@ function MediaUnlockTest_DisneyPlus() {
         echo -n -e "\r Disney+:\t\t\t\t${Font_Red}Failed (Network Connection[2])${Font_Suffix}\n"
         return
     fi
-    local isBanned=$(echo $TokenContent | python -m json.tool 2>/dev/null | grep 'forbidden-location')
-    local is403=$(echo $TokenContent | grep '403 ERROR')
+    local isBanned=$(echo "$TokenContent" | python -m json.tool 2>/dev/null | grep 'forbidden-location')
+    local is403=$(echo "$TokenContent" | grep '403 ERROR')
 
     if [ -n "$isBanned" ] || [ -n "$is403" ]; then
         echo -n -e "\r Disney+:\t\t\t\t${Font_Red}No (Banned)${Font_Suffix}\n"
@@ -470,8 +470,8 @@ function MediaUnlockTest_DisneyPlus() {
     fi
 
     local fakecontent=$(echo "$Media_Cookie" | sed -n '8p')
-    local refreshToken=$(echo $TokenContent | python -m json.tool 2>/dev/null | grep 'refresh_token' | awk '{print $2}' | cut -f2 -d'"')
-    local disneycontent=$(echo $fakecontent | sed "s/ILOVEDISNEY/${refreshToken}/g")
+    local refreshToken=$(echo "$TokenContent" | python -m json.tool 2>/dev/null | grep 'refresh_token' | awk '{print $2}' | cut -f2 -d'"')
+    local disneycontent="${fakecontent//ILOVEDISNEY/${refreshToken}}"
     local tmpresult=$(curl $curlArgs -${1} --user-agent "${UA_Browser}" -X POST -sSL --max-time 10 "https://disney.api.edge.bamgrid.com/graph/v1/device/graphql" -H "authorization: ZGlzbmV5JmJyb3dzZXImMS4wLjA.Cu56AgSfBTDag5NiRA81oLHkDZfu5L3CKadnefEAY84" -d "$disneycontent" 2>&1)
     if [[ "$tmpresult" == "curl"* ]]; then
         echo -n -e "\r Disney+:\t\t\t\t${Font_Red}Failed (Network Connection[3])${Font_Suffix}\n"
@@ -482,10 +482,10 @@ function MediaUnlockTest_DisneyPlus() {
         echo -n -e "\r Disney+:\t\t\t\t${Font_Red}Failed (Network Connection[4])${Font_Suffix}\n"
         return
     fi
-    local previewcheck=$(echo $previewchecktmp | grep preview)
-    local isUnavailable=$(echo $previewcheck | grep 'unavailable')
-    local region=$(echo $tmpresult | python -m json.tool 2>/dev/null | grep 'countryCode' | cut -f4 -d'"')
-    local inSupportedLocation=$(echo $tmpresult | python -m json.tool 2>/dev/null | grep 'inSupportedLocation' | awk '{print $2}' | cut -f1 -d',')
+    local previewcheck=$(echo "$previewchecktmp" | grep preview)
+    local isUnavailable=$(echo "$previewcheck" | grep 'unavailable')
+    local region=$(echo "$tmpresult" | python -m json.tool 2>/dev/null | grep 'countryCode' | cut -f4 -d'"')
+    local inSupportedLocation=$(echo "$tmpresult" | python -m json.tool 2>/dev/null | grep 'inSupportedLocation' | awk '{print $2}' | cut -f1 -d',')
 
     if [[ "$region" == "JP" ]]; then
         echo -n -e "\r Disney+:\t\t\t\t${Font_Green}Yes (Region: JP)${Font_Suffix}\n"
@@ -616,7 +616,7 @@ function MediaUnlockTest_ViuTV() {
         return
     fi
 
-    local result=$(echo $tmpresult | python -m json.tool 2>/dev/null | grep 'responseCode' | awk '{print $2}' | cut -f2 -d'"')
+    local result=$(echo "$tmpresult" | python -m json.tool 2>/dev/null | grep 'responseCode' | awk '{print $2}' | cut -f2 -d'"')
     if [[ "$result" == "SUCCESS" ]]; then
         echo -n -e "\r Viu.TV:\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
         return
@@ -636,7 +636,7 @@ function MediaUnlockTest_unext() {
         echo -n -e "\r U-NEXT:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local result=$(echo $tmpresult | python -m json.tool 2>/dev/null | grep 'resultStatus' | awk '{print $2}' | cut -d ',' -f1 2>&1)
+    local result=$(echo "$tmpresult" | python -m json.tool 2>/dev/null | grep 'resultStatus' | awk '{print $2}' | cut -d ',' -f1 2>&1)
     if [ -n "$result" ]; then
         if [[ "$result" == "475" ]]; then
             echo -n -e "\r U-NEXT:\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
@@ -728,7 +728,7 @@ function MediaUnlockTest_HamiVideo() {
         return
     fi
 
-    checkfailed=$(echo $tmpresult | python -m json.tool 2>/dev/null | grep 'code' | cut -f4 -d'"')
+    checkfailed=$(echo "$tmpresult" | python -m json.tool 2>/dev/null | grep 'code' | cut -f4 -d'"')
     if [[ "$checkfailed" == "06001-106" ]]; then
         echo -n -e "\r Hami Video:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         return
@@ -748,7 +748,7 @@ function MediaUnlockTest_4GTV() {
         return
     fi
 
-    checkfailed=$(echo $tmpresult | python -m json.tool 2>/dev/null | grep 'Success' | awk '{print $2}' | cut -f1 -d',')
+    checkfailed=$(echo "$tmpresult" | python -m json.tool 2>/dev/null | grep 'Success' | awk '{print $2}' | cut -f1 -d',')
     if [[ "$checkfailed" == "false" ]]; then
         echo -n -e "\r 4GTV.TV:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         return
@@ -951,13 +951,13 @@ function MediaUnlockTest_encoreTVB() {
         echo -n -e "\r encoreTVB:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    result=$(echo $tmpresult | python -m json.tool 2>/dev/null | grep 'error_subcode' | cut -f4 -d'"')
+    result=$(echo "$tmpresult" | python -m json.tool 2>/dev/null | grep 'error_subcode' | cut -f4 -d'"')
     if [[ "$result" == "CLIENT_GEO" ]]; then
         echo -n -e "\r encoreTVB:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         return
     fi
 
-    echo $tmpresult | python -m json.tool 2>/dev/null | grep 'account_id' >/dev/null 2>&1
+    echo "$tmpresult" | python -m json.tool 2>/dev/null | grep 'account_id' >/dev/null 2>&1
     if [ $? -eq 0 ]; then
         echo -n -e "\r encoreTVB:\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
         return
@@ -975,13 +975,13 @@ function MediaUnlockTest_Molotov() {
         return
     fi
 
-    echo $tmpresult | python -m json.tool 2>/dev/null | grep 'false' >/dev/null 2>&1
+    echo "$tmpresult" | python -m json.tool 2>/dev/null | grep 'false' >/dev/null 2>&1
     if [ $? -eq 0 ]; then
         echo -n -e "\r Molotov:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         return
     fi
 
-    echo $tmpresult | python -m json.tool 2>/dev/null | grep 'true' >/dev/null 2>&1
+    echo "$tmpresult" | python -m json.tool 2>/dev/null | grep 'true' >/dev/null 2>&1
     if [ $? -eq 0 ]; then
         echo -n -e "\r Molotov:\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
         return
@@ -1021,7 +1021,7 @@ function MediaUnlockTest_LineTV.TW() {
         echo -n -e "\r LineTV.TW:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    result=$(echo $tmpresult | python -m json.tool 2>/dev/null | grep 'countryCode' | awk '{print $2}' | cut -f1 -d',')
+    result=$(echo "$tmpresult" | python -m json.tool 2>/dev/null | grep 'countryCode' | awk '{print $2}' | cut -f1 -d',')
     if [ -n "$result" ]; then
         if [ "$result" = "228" ]; then
             echo -n -e "\r LineTV.TW:\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
@@ -1045,13 +1045,13 @@ function MediaUnlockTest_Viu.com() {
         return
     fi
 
-    result=$(echo $tmpresult | cut -f5 -d"/")
+    result=$(echo "$tmpresult" | cut -f5 -d"/")
     if [ -n "$result" ]; then
         if [[ "$result" == "no-service" ]]; then
             echo -n -e "\r Viu.com:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
             return
         else
-            result=$(echo $result | tr [:lower:] [:upper:])
+            result=$(echo "$result" | tr '[:lower:]' '[:upper:]')
             if [[ "$banresult" == *"block access"* ]]; then
                 echo -n -e "\r Viu.com:\t\t\t\t${Font_Red}No  (Region: ${result})${Font_Suffix}\n"
                 return
@@ -1114,7 +1114,7 @@ function MediaUnlockTest_ParamountPlus() {
         echo -n -e "\r Paramount+:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         return
     elif [[ "$result" == "200"* ]]; then
-        local region=$(echo $result | cut -f4 -d '/')
+        local region=$(echo "$result" | cut -f4 -d '/')
         if [[ -z "$region" ]]; then
             echo -n -e "\r Paramount+:\t\t\t\t${Font_Green}Yes (Region: US)${Font_Suffix}\n"
             return
@@ -1304,9 +1304,9 @@ function MediaUnlockTest_PrimeVideo_Region() {
         echo -n -e "\r Amazon Prime Video:\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local VPNDetected=$(echo $tmpresult1 | grep "您的设备使用了 VPN 或代理服务连接互联网请禁用并重试")
+    local VPNDetected=$(echo "$tmpresult1" | grep "您的设备使用了 VPN 或代理服务连接互联网请禁用并重试")
 
-    local result=$(echo $tmpresult | grep '"currentTerritory":' | sed 's/.*currentTerritory//' | cut -f3 -d'"' | head -n 1)
+    local result=$(echo "$tmpresult" | grep '"currentTerritory":' | sed 's/.*currentTerritory//' | cut -f3 -d'"' | head -n 1)
     if [ -n "$result" ]; then
         if [ -n "$VPNDetected" ]; then
             echo -n -e "\r Amazon Prime Video:\t\t\t${Font_Red}No  (VPN Detected;Region: $result)${Font_Suffix}\n"
@@ -1330,15 +1330,15 @@ function MediaUnlockTest_Radiko() {
         return
     fi
 
-    local checkfailed=$(echo $tmpresult | grep 'class="OUT"')
+    local checkfailed=$(echo "$tmpresult" | grep 'class="OUT"')
     if [ -n "$checkfailed" ]; then
         echo -n -e "\r Radiko:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         return
     fi
 
-    local checksuccess=$(echo $tmpresult | grep 'JAPAN')
+    local checksuccess=$(echo "$tmpresult" | grep 'JAPAN')
     if [ -n "$checksuccess" ]; then
-        area=$(echo $tmpresult | awk '{print $2}' | sed 's/.*>//')
+        area=$(echo "$tmpresult" | awk '{print $2}' | sed 's/.*>//')
         echo -n -e "\r Radiko:\t\t\t\t${Font_Green}Yes (City: $area)${Font_Suffix}\n"
         return
     else
@@ -1356,13 +1356,13 @@ function MediaUnlockTest_DMM() {
         return
     fi
 
-    local checkfailed=$(echo $tmpresult | grep 'Access is denied')
+    local checkfailed=$(echo "$tmpresult" | grep 'Access is denied')
     if [ -n "$checkfailed" ]; then
         echo -n -e "\r DMM:\t\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         return
     fi
 
-    local checksuccess=$(echo $tmpresult | grep 'PlayKey has expired')
+    local checksuccess=$(echo "$tmpresult" | grep 'PlayKey has expired')
     if [ -n "$checksuccess" ]; then
         echo -n -e "\r DMM:\t\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
         return
@@ -1381,13 +1381,13 @@ function MediaUnlockTest_DMMTV() {
         return
     fi
 
-    local checkfailed=$(echo $tmpresult | grep 'FOREIGN')
+    local checkfailed=$(echo "$tmpresult" | grep 'FOREIGN')
     if [ -n "$checkfailed" ]; then
         echo -n -e "\r DMM TV:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         return
     fi
 
-    local checksuccess=$(echo $tmpresult | grep 'UNAUTHORIZED')
+    local checksuccess=$(echo "$tmpresult" | grep 'UNAUTHORIZED')
     if [ -n "$checksuccess" ]; then
         echo -n -e "\r DMM TV:\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
         return
@@ -1404,8 +1404,8 @@ function MediaUnlockTest_Catchplay() {
         echo -n -e "\r CatchPlay+:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    result=$(echo $tmpresult | python -m json.tool 2>/dev/null | grep 'code' | awk '{print $2}' | cut -f2 -d'"')
-    region=$(echo $tmpresult | python -m json.tool 2>/dev/null | grep 'isoCode' | awk '{print $2}' | cut -f2 -d'"')
+    result=$(echo "$tmpresult" | python -m json.tool 2>/dev/null | grep 'code' | awk '{print $2}' | cut -f2 -d'"')
+    region=$(echo "$tmpresult" | python -m json.tool 2>/dev/null | grep 'isoCode' | awk '{print $2}' | cut -f2 -d'"')
     if [ -n "$result" ]; then
         if [ "$result" = "0" ]; then
             echo -n -e "\r CatchPlay+:\t\t\t\t${Font_Green}Yes (Region: ${region})${Font_Suffix}\n"
@@ -1647,11 +1647,11 @@ function MediaUnlockTest_EPIX() {
         return
     fi
 
-    EpixToken=$(echo $tmpToken | python -m json.tool 2>/dev/null | grep 'session_token' | cut -f4 -d'"')
+    EpixToken=$(echo "$tmpToken" | python -m json.tool 2>/dev/null | grep 'session_token' | cut -f4 -d'"')
     local tmpresult=$(curl $curlArgs -${1} -s --max-time 10 -X POST -H 'content-type: application/json' -H "x-session-token: ${EpixToken}" -d $'{"operationName":"PlayFlow","variables":{"id":"bW92aWU7MjExNDc=","supportedActions":["open_url","show_notice","start_billing","play_content","log_in","noop","confirm_provider","unlinked_provider"],"streamTypes":[{"encryptionScheme":"CBCS","packagingSystem":"DASH"},{"encryptionScheme":"CENC","packagingSystem":"DASH"},{"encryptionScheme":"NONE","packagingSystem":"HLS"},{"encryptionScheme":"SAMPLE_AES","packagingSystem":"HLS"}]},"query":"fragment ShowNotice on ShowNotice {\\n  type\\n  actions {\\n    continuationContext\\n    text\\n    __typename\\n  }\\n  description\\n  title\\n  __typename\\n}\\n\\nfragment OpenUrl on OpenUrl {\\n  type\\n  url\\n  __typename\\n}\\n\\nfragment Content on Content {\\n  title\\n  __typename\\n}\\n\\nfragment Movie on Movie {\\n  id\\n  shortName\\n  __typename\\n}\\n\\nfragment Episode on Episode {\\n  id\\n  series {\\n    shortName\\n    __typename\\n  }\\n  seasonNumber\\n  number\\n  __typename\\n}\\n\\nfragment Preroll on Preroll {\\n  id\\n  __typename\\n}\\n\\nfragment ContentUnion on ContentUnion {\\n  ...Content\\n  ...Movie\\n  ...Episode\\n  ...Preroll\\n  __typename\\n}\\n\\nfragment PlayContent on PlayContent {\\n  type\\n  continuationContext\\n  heartbeatToken\\n  currentItem {\\n    content {\\n      ...ContentUnion\\n      __typename\\n    }\\n    __typename\\n  }\\n  nextItem {\\n    content {\\n      ...ContentUnion\\n      __typename\\n    }\\n    showNotice {\\n      ...ShowNotice\\n      __typename\\n    }\\n    showNoticeAt\\n    __typename\\n  }\\n  amazonPlaybackData {\\n    pid\\n    playbackToken\\n    materialType\\n    __typename\\n  }\\n  playheadPosition\\n  vizbeeStreamInfo {\\n    customStreamInfo\\n    __typename\\n  }\\n  closedCaptions {\\n    ttml {\\n      location\\n      __typename\\n    }\\n    vtt {\\n      location\\n      __typename\\n    }\\n    xml {\\n      location\\n      __typename\\n    }\\n    __typename\\n  }\\n  hints {\\n    duration\\n    seekAllowed\\n    trackingEnabled\\n    trackingId\\n    __typename\\n  }\\n  streams(types: $streamTypes) {\\n    playlistUrl\\n    closedCaptionsEmbedded\\n    packagingSystem\\n    encryptionScheme\\n    videoQuality {\\n      height\\n      width\\n      __typename\\n    }\\n    widevine {\\n      authenticationToken\\n      licenseServerUrl\\n      __typename\\n    }\\n    playready {\\n      authenticationToken\\n      licenseServerUrl\\n      __typename\\n    }\\n    fairplay {\\n      authenticationToken\\n      certificateUrl\\n      licenseServerUrl\\n      __typename\\n    }\\n    __typename\\n  }\\n  __typename\\n}\\n\\nfragment StartBilling on StartBilling {\\n  type\\n  __typename\\n}\\n\\nfragment LogIn on LogIn {\\n  type\\n  __typename\\n}\\n\\nfragment Noop on Noop {\\n  type\\n  __typename\\n}\\n\\nfragment PreviewContent on PreviewContent {\\n  type\\n  title\\n  description\\n  stream {\\n    sources {\\n      hls {\\n        location\\n        __typename\\n      }\\n      __typename\\n    }\\n    __typename\\n  }\\n  __typename\\n}\\n\\nfragment ConfirmProvider on ConfirmProvider {\\n  type\\n  __typename\\n}\\n\\nfragment UnlinkedProvider on UnlinkedProvider {\\n  type\\n  __typename\\n}\\n\\nquery PlayFlow($id: String\u0021, $supportedActions: [PlayFlowActionEnum\u0021]\u0021, $context: String, $behavior: BehaviorEnum = DEFAULT, $streamTypes: [StreamDefinition\u0021]) {\\n  playFlow(\\n    id: $id\\n    supportedActions: $supportedActions\\n    context: $context\\n    behavior: $behavior\\n  ) {\\n    ...ShowNotice\\n    ...OpenUrl\\n    ...PlayContent\\n    ...StartBilling\\n    ...LogIn\\n    ...Noop\\n    ...PreviewContent\\n    ...ConfirmProvider\\n    ...UnlinkedProvider\\n    __typename\\n  }\\n}"}' 'https://api.epix.com/graphql'  2>&1)
 
-    local isBlocked=$(echo $tmpresult | grep 'MGM+ is only available in the United States')
-    local isOK=$(echo $tmpresult | grep StartBilling)
+    local isBlocked=$(echo "$tmpresult" | grep 'MGM+ is only available in the United States')
+    local isOK=$(echo "$tmpresult" | grep StartBilling)
     if [ -n "$isBlocked" ]; then
         echo -n -e "\r MGM+:\t\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         return
@@ -1671,8 +1671,8 @@ function MediaUnlockTest_NLZIET() {
         echo -n -e "\r NLZIET:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local isBlocked=$(echo $tmpresult | grep 'CountryNotAllowed')
-    local isOK=$(echo $tmpresult | grep 'streamSessionId')
+    local isBlocked=$(echo "$tmpresult" | grep 'CountryNotAllowed')
+    local isOK=$(echo "$tmpresult" | grep 'streamSessionId')
     if [ -n "$isBlocked" ]; then
         echo -n -e "\r NLZIET:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         return
@@ -1775,7 +1775,7 @@ function MediaUnlockTest_HBO_Spain() {
         return
     fi
 
-    local result=$(echo $tmpresult | python -m json.tool 2>/dev/null | grep signupAllowed | awk '{print $2}' | cut -f1 -d",")
+    local result=$(echo "$tmpresult" | python -m json.tool 2>/dev/null | grep signupAllowed | awk '{print $2}' | cut -f1 -d",")
     if [[ "$result" == "true" ]]; then
         echo -n -e "\r HBO Spain:\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
         return
@@ -1946,7 +1946,7 @@ function MediaUnlockTest_Crave() {
         echo -n -e "\r Crave:\t\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local result=$(echo $tmpresult | grep 'Geo Constraint Restrictions')
+    local result=$(echo "$tmpresult" | grep 'Geo Constraint Restrictions')
     if [ -n "$result" ]; then
         echo -n -e "\r Crave:\t\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         return
@@ -1966,7 +1966,7 @@ function MediaUnlockTest_Amediateka() {
         echo -n -e "\r Amediateka:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local result=$(echo $tmpresult | grep 'unavailable')
+    local result=$(echo "$tmpresult" | grep 'unavailable')
     if [ -n "$result" ]; then
         echo -n -e "\r Amediateka:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         return
@@ -2003,7 +2003,7 @@ function MediaUnlockTest_RaiPlay() {
         echo -n -e "\r Rai Play:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local result=$(echo $tmpresult | grep 'no_available')
+    local result=$(echo "$tmpresult" | grep 'no_available')
     if [ -n "$result" ]; then
         echo -n -e "\r Rai Play:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         return
@@ -2197,7 +2197,7 @@ function MediaUnlockTest_HBO_Nordic() {
         return
     fi
 
-    local result=$(echo $tmpresult | python -m json.tool 2>/dev/null | grep signupAllowed | awk '{print $2}' | cut -f1 -d",")
+    local result=$(echo "$tmpresult" | python -m json.tool 2>/dev/null | grep signupAllowed | awk '{print $2}' | cut -f1 -d",")
     if [[ "$result" == "true" ]]; then
         echo -n -e "\r HBO Nordic:\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
         return
@@ -2596,8 +2596,8 @@ function MediaUnlockTest_Telasa() {
         echo -n -e "\r Telasa:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local isForbidden=$(echo $tmpresult | grep IPLocationNotAllowed)
-    local isAllowed=$(echo $tmpresult | python -m json.tool 2>/dev/null | grep '"type"' | cut -f4 -d'"')
+    local isForbidden=$(echo "$tmpresult" | grep IPLocationNotAllowed)
+    local isAllowed=$(echo "$tmpresult" | python -m json.tool 2>/dev/null | grep '"type"' | cut -f4 -d'"')
     if [ -n "$isForbidden" ]; then
         echo -n -e "\r Telasa:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         return
@@ -2960,7 +2960,7 @@ function MediaUnlockTest_Philo(){
         echo -n -e "\r Philo:\t\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local result=$(echo $tmpresult | python -m json.tool 2>/dev/null | grep '"status":' | cut -f1 -d',' | awk '{print $2}' | sed 's/"//g')
+    local result=$(echo "$tmpresult" | python -m json.tool 2>/dev/null | grep '"status":' | cut -f1 -d',' | awk '{print $2}' | sed 's/"//g')
     if [[ "$result" == 'FAIL' ]]; then
         echo -n -e "\r Philo:\t\t\t\t\t${Font_Red}No${Font_Suffix}\n"
     elif [[ "$result" == 'SUCCESS' ]]; then
@@ -3053,7 +3053,7 @@ function MediaUnlockTest_TLCGO(){
         echo -n -e "\r TLC GO:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
         return
     fi
-    local result=$(echo $onetrustresult | grep '"country":"US"')
+    local result=$(echo "$onetrustresult" | grep '"country":"US"')
     if [ -z "$result" ]; then
         echo -n -e "\r TLC GO:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
     else
@@ -3311,7 +3311,7 @@ function MediaUnlockTest_AETV(){
         echo -n -e "\r A&E TV:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         return
     fi
-    local result=$(echo $tmpresult | python -m json.tool 2>/dev/null | grep '"ccpaApplies":' | cut -f1 -d',' | awk '{print $2}')
+    local result=$(echo "$tmpresult" | python -m json.tool 2>/dev/null | grep '"ccpaApplies":' | cut -f1 -d',' | awk '{print $2}')
     if [[ "$result" == "true" ]]; then
         echo -n -e "\r A&E TV:\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
     elif [[ "$result" == "false" ]]; then
@@ -4365,9 +4365,10 @@ function MediaUnlockTest_Wikipedia_Editable(){
 
 
 function echo_Result() {
+    local i
     for((i=0;i<${#array[@]};i++))
     do
-        echo "$result" | grep "${array[i]}"
+        echo "$result" | grep -F -- "${array[i]}"
         # sleep 0.03
     done;
 }
@@ -4388,7 +4389,7 @@ function NA_UnlockTest() {
     )
     wait
     local array=("FOX:" "Hulu:" "NFL+" "ESPN+:" "MGM+:" "Starz:" "Philo:" "FXNOW:" "HBO Max")
-    echo_Result ${result} ${array}
+    echo_Result
     local result=$(
     MediaUnlockTest_Shudder ${1} &
     MediaUnlockTest_BritBox ${1} &
@@ -4401,7 +4402,7 @@ function NA_UnlockTest() {
     )
     wait
     local array=("Shudder:" "BritBox:" "Crackle:" "CW TV:" "A&E TV:" "NBA TV:")
-    echo_Result ${result} ${array}
+    echo_Result
     MediaUnlockTest_NBCTV ${1}
     echo "$result" | grep "Fubo TV:"
     echo "$result" | grep "Tubi TV:"
@@ -4423,7 +4424,7 @@ function NA_UnlockTest() {
     )
     wait
     local array=("Sling TV:" "Pluto TV:" "Acorn TV:" "SHOWTIME:" "encoreTVB:" "Discovery" "Paramount+:" "Peacock TV:" "Popcornflix:" "Crunchyroll:" "Directv Stream:" "KBS American:" "KOCOWA:" "Maths Spot:")
-    echo_Result ${result} ${array}
+    echo_Result
     ShowRegion CA
     local result=$(
     MediaUnlockTest_CBCGem ${1} &
@@ -4449,7 +4450,7 @@ function EU_UnlockTest() {
     )
     wait
     local array=("Rakuten TV:" "SkyShowTime:" "HBO Max:" "Maths Spot:" "Viaplay" "Eurosport" "Setanta Sports:")
-    echo_Result ${result} ${array}
+    echo_Result
     ShowRegion GB
     local result=$(
     MediaUnlockTest_SkyGo ${1} &
@@ -4462,7 +4463,7 @@ function EU_UnlockTest() {
     )
     wait
     local array=("Sky Go:" "BritBox:" "ITV Hub:" "Channel 4:" "Channel 5" "BBC iPLAYER:" "Discovery+ UK:")
-    echo_Result ${result} ${array}
+    echo_Result
     ShowRegion FR
     local result=$(
     #MediaUnlockTest_Salto ${1} &
@@ -4475,10 +4476,10 @@ function EU_UnlockTest() {
     )
     wait
     local array=("Canal+:" "Molotov:" "France.tv")
-    echo_Result ${result} ${array}
+    echo_Result
     ShowRegion DE
     local array=("Joyn:" "Sky DE:" "ZDF:")
-    echo_Result ${result} ${array}
+    echo_Result
     ShowRegion NL
     local result=$(
     MediaUnlockTest_NLZIET ${1} &
@@ -4493,7 +4494,7 @@ function EU_UnlockTest() {
     )
     wait
     local array=("NLZIET:" "videoland:" "NPO Start Plus:")
-    echo_Result ${result} ${array}
+    echo_Result
     ShowRegion ES
     echo "$result" | grep "Movistar+:"
     ShowRegion IT
@@ -4532,7 +4533,7 @@ function HK_UnlockTest() {
     fi
     wait
     local array=("Now E:" "Viu.TV:" "MyTVSuper:" "HBO Max:" "HOY TV" "BiliBili Hongkong/Macau/Taiwan:" "Bahamut Anime:" "NBA TV:")
-    echo_Result ${result} ${array}
+    echo_Result
     echo "======================================="
 }
 
@@ -4556,7 +4557,7 @@ function TW_UnlockTest() {
     )
     wait
     local array=("KKTV:" "LiTV:" "ofiii:" "MyVideo:" "4GTV.TV:" "LineTV.TW:" "Hami Video:" "CatchPlay+:" "HBO Max" "Bahamut Anime:" "Friday Video:" "Bilibili Taiwan Only:")
-    echo_Result ${result} ${array}
+    echo_Result
     echo "======================================="
 }
 
@@ -4574,7 +4575,7 @@ function JP_UnlockTest() {
     )
     wait
     local array=("NHK+" "DMM TV:" "Abema.TV:" "Niconico:" "Telasa:" "Paravi:" "U-NEXT:" "Hulu Japan:")
-    echo_Result ${result} ${array}
+    echo_Result
     local result=$(
     MediaUnlockTest_TVer ${1} &
     MediaUnlockTest_wowow ${1} &
@@ -4591,7 +4592,7 @@ function JP_UnlockTest() {
     )
     wait
     local array=("TVer:" "WOWOW:" "VideoMarket:" "D Anime Store:" "FOD(Fuji TV):" "Radiko:" "Karaoke@DAM:" "J:com On Demand:" "AnimeFesta:" "Lemino:" "MGStage:" "Rakuten TV JP:")
-    echo_Result ${result} ${array}
+    echo_Result
     ShowRegion Game
     local result=$(
     MediaUnlockTest_Kancolle ${1} &
@@ -4602,14 +4603,14 @@ function JP_UnlockTest() {
     )
     wait
     local array=("Kancolle Japan:" "Pretty Derby Japan:" "Konosuba Fantastic Days:" "Princess Connect Re:Dive Japan:" "World Flipper Japan:" "Project Sekai: Colorful Stage:")
-    echo_Result ${result} ${array}
+    echo_Result
     ShowRegion Read
     local result=$(
     MediaUnlockTest_RakutenMagazine ${1} &
     )
     wait
     local array=("Rakuten MAGAZINE")
-    echo_Result ${result} ${array}
+    echo_Result
     ShowRegion Music
     local result=$(
     MediaUnlockTest_mora ${1} &
@@ -4617,7 +4618,7 @@ function JP_UnlockTest() {
     )
     wait
     local array=("Mora:" "music.jp:") 
-    echo_Result ${result} ${array}
+    echo_Result
     ShowRegion Forum
     MediaUnlockTest_EroGameSpace ${1}
     echo "======================================="
@@ -4671,7 +4672,7 @@ function Global_UnlockTest() {
     fi
     wait
     local array=("Dazn:" "HotStar:" "Disney+:" "Netflix:" "YouTube Premium:" "Amazon Prime Video:" "TVBAnywhere+:" "iQyi Oversea:" "Bilibili Anime:" "Viu.com:" "Tiktok" "YouTube CDN:" "Google Location:" "YouTube Region:" "Netflix Preferred CDN:" "Wikipedia Editability:" "Spotify Region:" "Steam Currency:" "Instagram")
-    echo_Result ${result} ${array}
+    echo_Result
     echo "======================================="
 }
 
@@ -4682,7 +4683,7 @@ function SA_UnlockTest() {
     )
     wait
     local array=("Star+:" "HBO Max:" "DirecTV Go:")
-    echo_Result ${result} ${array}
+    echo_Result
     echo "======================================="
 }
 
@@ -4697,7 +4698,7 @@ function OA_UnlockTest() {
     )
     wait
     local array=("NBA TV:" "Acorn TV:" "SHOWTIME:" "BritBox:" "Paramount+:")
-    echo_Result ${result} ${array}
+    echo_Result
     ShowRegion AU
     local result=$(
     MediaUnlockTest_Stan ${1} &
@@ -4713,7 +4714,7 @@ function OA_UnlockTest() {
     )
     wait
     local array=("Stan:" "Binge:" "7plus:" "Channel 9:" "Channel 10:" "ABC iView:" "Docplay:" "Optus Sports:" "SBS on Demand:" "Kayo Sports:")
-    echo_Result ${result} ${array}
+    echo_Result
     ShowRegion NZ
     local result=$(
     MediaUnlockTest_NeonTV ${1} &
@@ -4723,7 +4724,7 @@ function OA_UnlockTest() {
     )
     wait
     local array=("Neon TV:" "SkyGo NZ:" "ThreeNow:" "Maori TV:")
-    echo_Result ${result} ${array}
+    echo_Result
     echo "======================================="
 }
 
@@ -4742,7 +4743,7 @@ function KR_UnlockTest() {
     )
     wait
     local array=("Wavve:" "Tving:" "Coupang Play:" "Naver TV:" "Afreeca TV:" "SPOTV NOW:" "KBS Domestic:" "PandaTV:" "KOCOWA:")
-    echo_Result ${result} ${array}
+    echo_Result
     echo "======================================="
 }
 
@@ -4755,7 +4756,7 @@ function SEA_UnlockTest(){
     )
     wait
     local array=("HBO Max:" "B-Global SouthEastAsia:")
-    echo_Result ${result} ${array}
+    echo_Result
     ShowRegion SG
     local result=$(
         MediaUnlockTest_Catchplay ${1} &
@@ -4764,7 +4765,7 @@ function SEA_UnlockTest(){
     )
     wait
     local array=("meWATCH" "Starhub" "CatchPlay+:")
-    echo_Result ${result} ${array}
+    echo_Result
     ShowRegion TH
     local result=$(
     #MediaUnlockTest_TrueID ${1} &
@@ -4773,7 +4774,7 @@ function SEA_UnlockTest(){
     )
     wait
     local array=("TrueID" "AIS Play" "B-Global Thailand Only")
-    echo_Result ${result} ${array}
+    echo_Result
     ShowRegion ID
     local result=$(
     MediaUnlockTest_Vidio ${1} &
@@ -4782,7 +4783,7 @@ function SEA_UnlockTest(){
     )
     wait
     local array=("Vidio" "beIN Sports" "B-Global Indonesia Only")
-    echo_Result ${result} ${array}
+    echo_Result
     ShowRegion VN
     local result=$(
     # MediaUnlockTest_VTVcab ${1} &
@@ -4795,14 +4796,14 @@ function SEA_UnlockTest(){
     )
     wait
     local array=("MYTV" "Clip TV" "Galaxy Play" "K+" "TV360" "B-Global Việt Nam Only" )
-    echo_Result ${result} ${array}
+    echo_Result
     ShowRegion MY
     local result=$(
     MediaUnlockTest_Sooka ${1} &
     )
     wait
     local array=("Sooka")
-    echo_Result ${result} ${array}
+    echo_Result
     ShowRegion IN
     local result=$(
     MediaUnlockTest_MXPlayer ${1} &
@@ -4814,7 +4815,7 @@ function SEA_UnlockTest(){
     )
     wait
     local array=("Zee5:" "NBA TV:" "MXPlayer" "Tata Play" "SonyLiv" "Jio Cinema")
-    echo_Result ${result} ${array}
+    echo_Result
     echo "======================================="
 }
 
@@ -4828,7 +4829,7 @@ function AF_UnlockTest() {
     )
     wait
     local array=("DStv:" "Showmax:" "Viu.com:")
-    echo_Result ${result} ${array}
+    echo_Result
     echo "======================================="
 }
 
@@ -4847,7 +4848,7 @@ function Sport_UnlockTest() {
     )
     wait
     local array=("Dazn:" "Star+:" "ESPN+:" "NBA TV:" "Fubo TV:" "Mola TV:" "Setanta Sports:" "Optus Sports:" "Bein Sports Connect:" "Eurosport RO:")
-    echo_Result ${result} ${array}
+    echo_Result
     echo "======================================="
 }
 
@@ -4862,7 +4863,7 @@ function AI_UnlockTest() {
     )
     wait
     local array=("ChatGPT" "Copilot" "Gemini" "Sora:" "Claude:" )
-    echo_Result ${result} ${array}
+    echo_Result
 
     echo "======================================="
 }
