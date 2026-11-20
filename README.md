@@ -1,27 +1,59 @@
 # RegionRestrictionCheck
-本脚本为 [lmc999/RegionRestrictionCheck](https://github.com/lmc999/RegionRestrictionCheck) 的fork版本，由于基本已经完全重构，目前已取消Fork关系。
 
-## 支持OS
+中文 | [English](README_EN.md)
 
-仅在Debian最新稳定版测试通过，其他OS未经测试，如运行出现问题请尝试解决依赖。
+流媒体及常见网络服务地区限制检测脚本。本仓库基于上游 [lmc999/RegionRestrictionCheck](https://github.com/lmc999/RegionRestrictionCheck) 演化并独立维护。
+
+## 支持 OS
+
+脚本内含以下环境的适配分支（按 `checkOS()` 检测包管理器）：
+
+- Debian 系（`apt`）
+- RedHat 系（`dnf` / `yum`）
+- macOS（`brew`）
+- Termux（`pkg`）
+
+实际仅在 Debian 稳定版验证通过，其余环境未经完整测试；如运行出现问题，请自行检查并解决依赖。
 
 ## 使用方法
 
-**使用脚本前请确认curl已安装**
+**使用脚本前请确认已安装 `curl`。**
 
-````bash
-bash <(curl -L -s https://github.com/1-stream/RegionRestrictionCheck/raw/main/check.sh)
-````
+默认运行：
+
+```bash
+bash <(curl -L -s https://raw.githubusercontent.com/hexllm/RegionRestrictionCheck/main/check.sh)
+```
+
+仅检测 IPv4：
+
+```bash
+bash <(curl -L -s https://raw.githubusercontent.com/hexllm/RegionRestrictionCheck/main/check.sh) -M 4
+```
+
+仅检测 IPv6：
+
+```bash
+bash <(curl -L -s https://raw.githubusercontent.com/hexllm/RegionRestrictionCheck/main/check.sh) -M 6
+```
+
+指定出口网卡或 IP：
+
+```bash
+bash <(curl -L -s https://raw.githubusercontent.com/hexllm/RegionRestrictionCheck/main/check.sh) -I eth0
+```
 
 ## 参数
 
-| Flag | Description |
-| ---- | ----------- |
-| -I \<Interface\>\/\<IP\> | 指定网卡/出口ip |
-| -M \<4\/6\> | 指定仅测试IPv4/IPv6 |
-| -P \<Proxy\> | 指定测试是使用代理,支持协议请参考curl |
-| -F \<Function\> | 仅运行指定函数 |
-| -S | 特殊用途 |
-| -R \<IP\> | 指定将所有域名解析为指定ip |
-| -D \<DNS\> | 指定使用特定DNS **需要使用[启用了c-ares库的curl](https://gist.github.com/nevermosby/88efb9ecc4e61b8f401d449649796dfc)(配合-C参数)**|
-| -C \<Path\> | 指定使用特定 Curl 程序
+| 参数 | 说明 |
+| ---- | ---- |
+| `-I <Interface/IP>` | 指定测试使用的网卡或出口 IP（传给 curl `--interface`） |
+| `-M <4/6>` | 指定仅测试 IPv4（`4`）或仅测试 IPv6（`6`） |
+| `-E` | 使用英文输出 |
+| `-X <IP>` | 在请求头中注入 `X-Forwarded-For` |
+| `-P <Proxy>` | 指定测试使用的代理，支持协议请参考 curl `-x` |
+| `-F <Function>` | 仅运行指定的检测函数 |
+| `-S <Value>` | 特殊选项，目前仅识别 `force6`（强制输出被标记为 `IPv6 Not Support` 的条目） |
+| `-R <IP>` | 将所有 HTTPS 域名（443 端口）解析到指定 IP（传给 curl `--resolve *:443:<IP>`） |
+| `-C <Path>` | 指定使用的 `curl` 程序路径 |
+| `-D <DNS>` | 指定使用的 DNS 服务器（需使用启用了 c-ares 的 `curl`，可配合 `-C` 参数指定） |
