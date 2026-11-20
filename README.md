@@ -2,7 +2,7 @@
 
 中文 | [English](README_EN.md)
 
-流媒体及常见网络服务地区限制检测脚本。本仓库基于上游 [lmc999/RegionRestrictionCheck](https://github.com/lmc999/RegionRestrictionCheck) 演化并独立维护。
+流媒体及常见网络服务地区限制检测脚本。本仓库 fork 自 [1-stream/RegionRestrictionCheck](https://github.com/1-stream/RegionRestrictionCheck)，并在此基础上独立维护，脚本内容与上游已有较大差异。
 
 ## 支持 OS
 

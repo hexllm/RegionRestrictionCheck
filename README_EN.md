@@ -2,7 +2,7 @@
 
 [中文](README.md) | English
 
-A Bash script for checking regional restrictions of streaming media and common online services. This repository evolved from upstream [lmc999/RegionRestrictionCheck](https://github.com/lmc999/RegionRestrictionCheck) and is maintained independently.
+A Bash script for checking regional restrictions of streaming media and common online services. This repository is a fork of [1-stream/RegionRestrictionCheck](https://github.com/1-stream/RegionRestrictionCheck), maintained independently with substantial changes.
 
 ## Supported OS
 
